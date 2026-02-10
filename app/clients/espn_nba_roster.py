@@ -127,3 +127,4 @@ async def normalize_player(raw):
     print("✅ NORMALIZED →", normalized)
 
     return normalized
+   
