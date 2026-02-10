@@ -1,50 +1,54 @@
 import httpx
 
-BASE = "https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/athletes"
+BASE = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
+
 
 async def get_player_stats(player_id: str):
-    """
-    Obtiene promedios por juego del jugador desde ESPN Core API
-    """
 
-    url = f"{BASE}/{player_id}/statistics"
-    params = {
-        "season": 2025,      # ✅ temporada válida actual
-        "seasontype": 2      # ✅ regular season
-    }
+    url = f"{BASE}/{player_id}/stats"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, params=params)
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(url)
 
-        # ESPN usa 404 cuando no hay stats
-        if r.status_code == 404:
+        if r.status_code != 200:
+            print("❌ ESPN Stats HTTP:", r.status_code)
             return None
 
-        r.raise_for_status()
         data = r.json()
 
-    per_game = {
-        "minutes": 0.0,
-        "points": 0.0,
-        "rebounds": 0.0,
-        "assists": 0.0
-    }
+    try:
+        categories = data.get("categories", [])
 
-    splits = data.get("splits") or {}
-    categories = splits.get("categories") or []
+        averages = next(
+            c for c in categories if c.get("name") == "averages"
+        )
 
-    for cat in categories:
-        for stat in cat.get("stats", []):
-            name = stat.get("name")
-            value = float(stat.get("value", 0))
+        stats_list = averages.get("statistics", [])
 
-            if name == "avgMinutes":
-                per_game["minutes"] = value
-            elif name == "avgPoints":
-                per_game["points"] = value
-            elif name == "avgRebounds":
-                per_game["rebounds"] = value
-            elif name == "avgAssists":
-                per_game["assists"] = value
+        if not stats_list:
+            print("⚠️ ESPN sin statistics")
+            return None
 
-    return per_game
+        # 👇 usa temporada más reciente automática
+        latest = sorted(
+            stats_list,
+            key=lambda x: x["season"]["year"],
+            reverse=True
+        )[0]
+
+        stats = latest["stats"]
+
+        per_game = {
+            "minutes": float(stats[2]),
+            "points": float(stats[17]),
+            "rebounds": float(stats[11]),
+            "assists": float(stats[12])
+        }
+
+        print("✅ ESPN PER GAME:", per_game)
+
+        return per_game
+
+    except Exception as e:
+        print("❌ ESPN Parse Error:", e)
+        return None
