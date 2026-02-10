@@ -15,10 +15,17 @@ def safe_float(value, default):
 # 🏀 NBA PROJECTION ENGINE (UPGRADED)
 # ==========================================================
 def wspm_nba_projection(prop, odds, script):
+    
+    model = prop.get("projection_model", {})
 
-    base_projection = safe_float(prop.get("projection_model"), 0)
-    if base_projection == 0:
-        return {"mean": 0, "std_dev": 1}
+    # ✅ Compatibilidad float o dict
+    if isinstance(model, dict):
+        base_projection = float(model.get("mean", 0))
+    else:
+        base_projection = safe_float(model, 0)
+
+    if base_projection <= 0:
+        return {"mean": 0.1, "std_dev": 1}
 
     total = safe_float(odds.get("over_under") or odds.get("total"), 220)
     spread = abs(safe_float(odds.get("spread"), 0))
@@ -28,15 +35,17 @@ def wspm_nba_projection(prop, odds, script):
     script_factor = 1.05 if script == "high_scoring" else 0.95 if script == "low_scoring" else 1.00
 
     mean = base_projection * pace * blowout * script_factor
+    std_dev = max(mean * 0.18, 1)
 
-    # 📊 Varianza histórica NBA props
-    std_dev = mean * 0.18 if mean > 0 else 1
+    print(
+        f"🧪 WSPM DEBUG → {prop.get('name')} | "
+        f"base={base_projection} → final={mean}"
+    )
 
     return {
         "mean": round(mean, 2),
         "std_dev": round(std_dev, 2)
     }
-
 
 # ==========================================================
 # 🏈 NFL PROJECTION ENGINE (UPGRADED)
