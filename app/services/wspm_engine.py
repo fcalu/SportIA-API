@@ -14,37 +14,53 @@ def safe_float(value, default):
 # ==========================================================
 # 🏀 NBA PROJECTION ENGINE (UPGRADED)
 # ==========================================================
+# ==========================================
+# 🏀 WSPM NBA PROJECTION ENGINE + BLOWOUT
+# ==========================================
+
 def wspm_nba_projection(prop, odds, script):
-    
-    model = prop.get("projection_model", {})
 
-    # ✅ Compatibilidad float o dict
-    if isinstance(model, dict):
-        base_projection = float(model.get("mean", 0))
-    else:
-        base_projection = safe_float(model, 0)
+    mean = prop["projection_model"]["mean"]
+    std_dev = prop["projection_model"]["std_dev"]
+    minutes = prop.get("projected_minutes", 30)
 
-    if base_projection <= 0:
-        return {"mean": 0.1, "std_dev": 1}
+    spread = abs(float(odds.get("spread", 0))) if odds else 0
 
-    total = safe_float(odds.get("over_under") or odds.get("total"), 220)
-    spread = abs(safe_float(odds.get("spread"), 0))
+    # ======================================
+    # 🧨 BLOWOUT MODEL (APLICACIÓN REAL)
+    # ======================================
+    if spread >= 15:
 
-    pace = 1.08 if total > 232 else 0.94 if total < 214 else 1.00
-    blowout = 0.92 if spread > 10 else 1.04 if spread < 4 else 1.00
-    script_factor = 1.05 if script == "high_scoring" else 0.95 if script == "low_scoring" else 1.00
+        if 15 <= spread < 20:
+            primary_cut = 0.15
+            bench_boost = 0.08
+            variance_boost = 0.15
+        else:
+            primary_cut = 0.22
+            bench_boost = 0.12
+            variance_boost = 0.22
 
-    mean = base_projection * pace * blowout * script_factor
-    std_dev = max(mean * 0.18, 1)
+        if prop["role"] == "Primary":
+            mean *= (1 - primary_cut)
+            minutes *= (1 - primary_cut)
+        else:
+            mean *= (1 + bench_boost)
+            minutes *= (1 + bench_boost)
 
-    print(
-        f"🧪 WSPM DEBUG → {prop.get('name')} | "
-        f"base={base_projection} → final={mean}"
-    )
+        std_dev *= (1 + variance_boost)
+
+    # ======================================
+    # SCRIPT ADJUSTMENT
+    # ======================================
+    if script == "high_scoring":
+        mean *= 1.03
+    elif script == "defensive":
+        mean *= 0.97
 
     return {
         "mean": round(mean, 2),
-        "std_dev": round(std_dev, 2)
+        "std_dev": round(std_dev, 2),
+        "projected_minutes": round(minutes, 2)
     }
 
 # ==========================================================

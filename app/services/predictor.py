@@ -109,7 +109,7 @@ async def ai_predict(req):
             players = await get_team_roster(home_id) + await get_team_roster(away_id)
             statuses = await get_event_player_status(sport, league, event_id)
 
-            player_props = build_nba_props_from_roster(players, statuses)
+            player_props = build_nba_props_from_roster(players, statuses, odds)
             debug("RAW NBA PROPS", player_props)
 
             for prop in player_props:
