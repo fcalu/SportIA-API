@@ -84,32 +84,52 @@ async def get_player_stats(player_id: str):
         )
 
         # ===============================
-        # GAME LOG (últimos 10)
+        # SAFE GAME LOG FETCH
         # ===============================
         gamelog_url = f"{BASE_GAMELOG}/{player_id}/gamelog"
         gl_res = await client.get(gamelog_url)
 
         recent_points = []
-        recent_minutes = []
 
         if gl_res.status_code == 200:
             gl_data = gl_res.json()
-            events = gl_data.get("events", [])[:10]
 
-            for game in events:
+            events = gl_data.get("events")
+
+            # 🔐 SAFE HANDLING
+            if isinstance(events, list):
+                games = events[:10]
+
+            elif isinstance(events, dict) and "$ref" in events:
+                # Follow the reference
+                ref_res = await client.get(events["$ref"])
+                if ref_res.status_code == 200:
+                    ref_data = ref_res.json()
+                    games = ref_data.get("items", [])[:10]
+                else:
+                    games = []
+
+            else:
+                games = []
+
+            # Extract stats safely
+            for game in games:
                 stats = game.get("statistics", {})
                 pts = float(stats.get("points", 0))
                 mins = float(stats.get("minutes", 0))
 
                 if mins > 0:
                     recent_points.append(pts)
-                    recent_minutes.append(mins)
 
         # ===============================
-        # VARIANCE REAL
+        # VARIANCE + FORM
         # ===============================
         if len(recent_points) >= 5:
-            std_points = statistics.stdev(recent_points)
+            try:
+                std_points = statistics.stdev(recent_points)
+            except:
+                std_points = blended["points"] * 0.18
+
             avg_last5 = sum(recent_points[:5]) / min(5, len(recent_points))
         else:
             std_points = blended["points"] * 0.18
