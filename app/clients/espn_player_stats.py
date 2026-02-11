@@ -34,9 +34,6 @@ async def get_player_stats(player_id: str):
 
     async with httpx.AsyncClient(timeout=15) as client:
 
-        # ===============================
-        # SEASON STATS
-        # ===============================
         stats_url = f"{BASE_STATS}/{player_id}/stats"
         stats_res = await client.get(stats_url)
 
@@ -84,7 +81,7 @@ async def get_player_stats(player_id: str):
         )
 
         # ===============================
-        # SAFE GAME LOG FETCH
+        # SAFE GAME LOG
         # ===============================
         gamelog_url = f"{BASE_GAMELOG}/{player_id}/gamelog"
         gl_res = await client.get(gamelog_url)
@@ -93,26 +90,19 @@ async def get_player_stats(player_id: str):
 
         if gl_res.status_code == 200:
             gl_data = gl_res.json()
-
             events = gl_data.get("events")
 
-            # 🔐 SAFE HANDLING
+            games = []
+
             if isinstance(events, list):
                 games = events[:10]
 
             elif isinstance(events, dict) and "$ref" in events:
-                # Follow the reference
                 ref_res = await client.get(events["$ref"])
                 if ref_res.status_code == 200:
                     ref_data = ref_res.json()
                     games = ref_data.get("items", [])[:10]
-                else:
-                    games = []
 
-            else:
-                games = []
-
-            # Extract stats safely
             for game in games:
                 stats = game.get("statistics", {})
                 pts = float(stats.get("points", 0))
@@ -122,17 +112,19 @@ async def get_player_stats(player_id: str):
                     recent_points.append(pts)
 
         # ===============================
-        # VARIANCE + FORM
+        # VARIANCE ROBUSTA
         # ===============================
         if len(recent_points) >= 5:
             try:
                 std_points = statistics.stdev(recent_points)
+                if std_points < 1:
+                    std_points = blended["points"] * 0.22
             except:
-                std_points = blended["points"] * 0.18
+                std_points = blended["points"] * 0.22
 
             avg_last5 = sum(recent_points[:5]) / min(5, len(recent_points))
         else:
-            std_points = blended["points"] * 0.18
+            std_points = blended["points"] * 0.22
             avg_last5 = blended["points"]
 
         season_avg = blended["points"]

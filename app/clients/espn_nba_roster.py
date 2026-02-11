@@ -76,7 +76,7 @@ async def normalize_player(raw):
     rpm = reb / minutes if minutes else 0
     apm = ast / minutes if minutes else 0
 
-    usage = min(0.32, max(0.14, ppm * 1.45))
+    usage = max(0.12, min(0.36, ppm * 1.25))
 
     normalized = {
         "id": player_id,
