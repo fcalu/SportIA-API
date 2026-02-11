@@ -1,25 +1,55 @@
 # ==========================================
-# 🏀 NBA PROP BUILDER — PRO 2026 + BLOWOUT
+# 🏀 NBA PROP BUILDER — PRO 2026 + BLOWOUT + STATUS FILTER
 # ==========================================
 
 def build_nba_props_from_roster(players, player_status, odds=None):
 
     props = []
 
-    inactive_ids = [pid for pid, st in player_status.items() if st != "ACTIVE"]
+    # ==========================================
+    # 🔐 STATUS FILTER — SOLO JUGADORES CONFIRMADOS
+    # ==========================================
+
+    SAFE_STATUSES = {"ACTIVE", "PROBABLE"}
+
+    inactive_ids = []
+
+    for pid, status in player_status.items():
+
+        if not status:
+            inactive_ids.append(pid)
+            continue
+
+        normalized_status = str(status).strip().upper()
+
+        if normalized_status not in SAFE_STATUSES:
+            inactive_ids.append(pid)
+
+    # ==========================================
+    # CALCULAR RECURSOS LIBERADOS
+    # ==========================================
 
     freed_minutes, freed_usage, freed_rebounds, freed_assists = \
         calculate_freed_resources(players, inactive_ids)
 
     spread = abs(float(odds.get("spread", 0))) if odds else 0
 
+    # ==========================================
+    # LOOP PRINCIPAL
+    # ==========================================
+
     for p in players:
-        if "id" not in p or p["id"] in inactive_ids:
+
+        if "id" not in p:
+            continue
+
+        if p["id"] in inactive_ids:
             continue
 
         # ===============================
         # MINUTES REDISTRIBUTION
         # ===============================
+
         minute_boost = redistribute_minutes(p, inactive_ids, players)
         minutes_projection = min(40.0, p["base_minutes"] + minute_boost)
 
@@ -29,6 +59,7 @@ def build_nba_props_from_roster(players, player_status, odds=None):
         # ===============================
         # USAGE REDISTRIBUTION
         # ===============================
+
         usage_boost = redistribute_usage(p, freed_usage, players, inactive_ids)
 
         rebound_boost = redistribute_rebounds(p, freed_rebounds)
@@ -46,16 +77,15 @@ def build_nba_props_from_roster(players, player_status, odds=None):
         # ===============================
         # 🧨 BLOWOUT ADJUSTMENT
         # ===============================
+
         if spread >= 15:
 
             if 15 <= spread < 20:
                 primary_cut = 0.15
                 bench_boost = 0.08
-                variance_boost = 0.15
             else:
                 primary_cut = 0.22
                 bench_boost = 0.12
-                variance_boost = 0.22
 
             if p["role"] == "Primary":
                 minutes_projection *= (1 - primary_cut)
@@ -65,7 +95,9 @@ def build_nba_props_from_roster(players, player_status, odds=None):
         # ===============================
         # BUILD PROPS
         # ===============================
+
         if p["position"] in ["PG", "SG"]:
+
             props.append(
                 build_prop(
                     p,
@@ -78,6 +110,7 @@ def build_nba_props_from_roster(players, player_status, odds=None):
                     spread
                 )
             )
+
             props.append(
                 build_prop(
                     p,
@@ -90,7 +123,9 @@ def build_nba_props_from_roster(players, player_status, odds=None):
                     spread
                 )
             )
+
         else:
+
             props.append(
                 build_prop(
                     p,
@@ -103,6 +138,7 @@ def build_nba_props_from_roster(players, player_status, odds=None):
                     spread
                 )
             )
+
             props.append(
                 build_prop(
                     p,
@@ -125,17 +161,21 @@ def build_nba_props_from_roster(players, player_status, odds=None):
 
 def calculate_freed_resources(players, inactive_ids):
     f_min = f_usg = f_reb = f_ast = 0
+
     for p in players:
         if p["id"] in inactive_ids:
             f_min += p["base_minutes"]
             f_usg += p["usage_rate"]
             f_reb += p["reb_per_min"] * p["base_minutes"]
             f_ast += p["ast_per_min"] * p["base_minutes"]
+
     return f_min, f_usg, f_reb, f_ast
 
 
 def redistribute_minutes(player, inactive_ids, players):
+
     boost = 0
+
     active_in_pos = [
         p for p in players
         if p["position"] == player["position"]
@@ -198,7 +238,7 @@ def build_prop(player, prop_type, projection, min_proj,
     minutes_factor = max(0.15, 1 - (min_proj / 60))
     adjusted_std = base_std * (1 + minutes_factor)
 
-    # 🔥 Extra variance in blowout
+    # Extra variance in blowout
     if spread >= 15:
         adjusted_std *= 1.15 if spread < 20 else 1.22
 
