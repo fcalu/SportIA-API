@@ -102,29 +102,70 @@ async def ai_predict(req):
                 p["projection_model"] = wspm_nfl_projection(p, odds, script)
 
         # 🏀 NBA
+        # 🏀 NBA
         elif sport == "basketball":
+
             home_id, away_id = await get_event_teams(sport, league, event_id)
+
             from app.clients.espn_nba_roster import get_team_roster
 
-            players = await get_team_roster(home_id) + await get_team_roster(away_id)
+            # 🔹 1. Traemos roster completo por equipo (temporada)
+            roster_home = await get_team_roster(home_id)
+            roster_away = await get_team_roster(away_id)
+
+            players = roster_home + roster_away
+
+            # 🔹 2. Traemos status REAL del evento
             statuses = await get_event_player_status(sport, league, event_id)
 
-            player_props = build_nba_props_from_roster(players, statuses, odds)
+            # 🔒 3. FILTRO DEFINITIVO → SOLO JUGADORES QUE REALMENTE ESTÁN EN EL PARTIDO
+            filtered_players = []
+
+            for p in players:
+                pid = str(p.get("id"))
+
+                # Si el jugador no aparece en el evento → NO juega
+                if pid not in statuses:
+                    continue
+
+                status = statuses.get(pid)
+
+                # Solo jugadores activos / disponibles
+                if status not in ["ACTIVE", "PROBABLE", "STARTER"]:
+                    continue
+
+                filtered_players.append(p)
+
+            debug("FILTERED NBA PLAYERS", [p["name"] for p in filtered_players])
+
+            # 🔹 4. Construimos props SOLO con jugadores válidos
+            player_props = build_nba_props_from_roster(
+                filtered_players,
+                statuses,
+                odds
+            )
+
             debug("RAW NBA PROPS", player_props)
 
+            # 🔹 5. Proyección WSPM + línea artificial (como ya lo tienes)
             for prop in player_props:
                 prop = normalize_prop(prop)
+
                 projection = wspm_nba_projection(prop, odds, script)
 
                 if isinstance(projection, dict):
                     prop["projection_model"] = projection
                     prop["line"] = round(projection.get("mean", 0) * 0.97, 1)
                 else:
-                    prop["projection_model"] = {"mean": projection, "std_dev": max(projection * 0.2, 1)}
+                    prop["projection_model"] = {
+                        "mean": projection,
+                        "std_dev": max(projection * 0.2, 1)
+                    }
                     prop["line"] = round(projection * 0.97, 1)
 
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
+
 
         # ⚽ Soccer
         elif sport == "soccer":
