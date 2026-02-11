@@ -170,11 +170,16 @@ def redistribute_assists(player, freed_assists):
 # ==========================================
 
 def build_prop(player, prop_type, projection, min_proj, pts_r, reb_r, ast_r):
+    
+    if prop_type == "Points":
+        base_std = player.get("points_std_dev", projection * 0.22)
+    elif prop_type == "Rebounds":
+        base_std = player.get("reb_std_dev", projection * 0.25)
+    elif prop_type == "Assists":
+        base_std = player.get("ast_std_dev", projection * 0.30)
+    else:
+        base_std = projection * 0.22
 
-    base_std = player.get("points_std_dev", projection * 0.22)
-
-    # 🔥 Varianza dinámica según minutos proyectados
-    # Más minutos = menor varianza relativa
     minutes_factor = max(0.15, 1 - (min_proj / 60))
     adjusted_std = base_std * (1 + minutes_factor)
 

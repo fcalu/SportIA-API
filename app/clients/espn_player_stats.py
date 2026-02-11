@@ -4,9 +4,7 @@ import statistics
 BASE_STATS = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
 BASE_GAMELOG = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
 
-# ==========================================================
-# BLEND SEASON STATS
-# ==========================================================
+
 def blend_stats(current, previous, current_games=50):
 
     if not previous:
@@ -27,9 +25,7 @@ def blend_stats(current, previous, current_games=50):
         "assists": current["assists"] * w_current + previous["assists"] * w_prev
     }
 
-# ==========================================================
-# GET PLAYER STATS + GAMELOG + VARIANCE
-# ==========================================================
+
 async def get_player_stats(player_id: str):
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -81,7 +77,7 @@ async def get_player_stats(player_id: str):
         )
 
         # ===============================
-        # SAFE GAME LOG
+        # GAME LOG (para varianza real)
         # ===============================
         gamelog_url = f"{BASE_GAMELOG}/{player_id}/gamelog"
         gl_res = await client.get(gamelog_url)
@@ -96,7 +92,6 @@ async def get_player_stats(player_id: str):
 
             if isinstance(events, list):
                 games = events[:10]
-
             elif isinstance(events, dict) and "$ref" in events:
                 ref_res = await client.get(events["$ref"])
                 if ref_res.status_code == 200:
@@ -107,12 +102,11 @@ async def get_player_stats(player_id: str):
                 stats = game.get("statistics", {})
                 pts = float(stats.get("points", 0))
                 mins = float(stats.get("minutes", 0))
-
                 if mins > 0:
                     recent_points.append(pts)
 
         # ===============================
-        # VARIANCE ROBUSTA
+        # VARIANZA MULTI-STAT
         # ===============================
         if len(recent_points) >= 5:
             try:
@@ -127,6 +121,9 @@ async def get_player_stats(player_id: str):
             std_points = blended["points"] * 0.22
             avg_last5 = blended["points"]
 
+        std_reb = max(0.8, blended["rebounds"] * 0.25)
+        std_ast = max(0.8, blended["assists"] * 0.30)
+
         season_avg = blended["points"]
         form_factor = (avg_last5 / season_avg) if season_avg > 0 else 1
 
@@ -136,5 +133,7 @@ async def get_player_stats(player_id: str):
             "rebounds": blended["rebounds"],
             "assists": blended["assists"],
             "points_std_dev": round(std_points, 2),
+            "reb_std_dev": round(std_reb, 2),
+            "ast_std_dev": round(std_ast, 2),
             "form_factor": round(form_factor, 3)
         }

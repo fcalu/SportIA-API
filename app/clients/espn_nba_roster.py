@@ -59,14 +59,18 @@ async def normalize_player(raw):
 
     if not stats:
         minutes, pts, reb, ast = 18, 6, 3, 2
-        std = 3
+        std_pts = 3
+        std_reb = 2
+        std_ast = 2
         form = 1
     else:
         minutes = stats.get("minutes", 18)
         pts = stats.get("points", 6)
         reb = stats.get("rebounds", 3)
         ast = stats.get("assists", 2)
-        std = stats.get("points_std_dev", pts * 0.18)
+        std_pts = stats.get("points_std_dev", pts * 0.22)
+        std_reb = stats.get("reb_std_dev", reb * 0.25)
+        std_ast = stats.get("ast_std_dev", ast * 0.30)
         form = stats.get("form_factor", 1)
 
     if not minutes or minutes == 0:
@@ -78,18 +82,18 @@ async def normalize_player(raw):
 
     usage = max(0.12, min(0.36, ppm * 1.25))
 
-    normalized = {
+    return {
         "id": player_id,
         "name": raw["fullName"],
         "position": pos,
-        "role": "Primary" if usage > 0.25 else "Secondary",
+        "role": "Primary" if usage > 0.24 else "Secondary",
         "base_minutes": round(minutes, 2),
         "usage_rate": round(usage, 3),
         "points_per_min": round(ppm, 3),
         "reb_per_min": round(rpm, 3),
         "ast_per_min": round(apm, 3),
-        "points_std_dev": std,
+        "points_std_dev": round(std_pts, 2),
+        "reb_std_dev": round(std_reb, 2),
+        "ast_std_dev": round(std_ast, 2),
         "form_factor": form
     }
-
-    return normalized
