@@ -55,57 +55,23 @@ async def normalize_player(raw):
     player_id = raw["id"]
     pos = raw.get("position", {}).get("abbreviation", "SF")
 
-    print(f"\n🧪 NORMALIZING PLAYER → {raw.get('fullName')} ({player_id})")
-
     stats = await get_player_stats(player_id)
 
-    print("📊 RAW STATS →", stats)
-
-    # ===============================
-    # FALLBACK SAFE EXTRACTION
-    # ===============================
     if not stats:
-        print("⚠️ NO STATS → USING DEFAULTS")
         minutes, pts, reb, ast = 18, 6, 3, 2
+        std = 3
+        form = 1
     else:
-        minutes = (
-            stats.get("minutes")
-            or stats.get("avgMinutes")
-            or stats.get("minutesPerGame")
-            or 18
-        )
+        minutes = stats.get("minutes", 18)
+        pts = stats.get("points", 6)
+        reb = stats.get("rebounds", 3)
+        ast = stats.get("assists", 2)
+        std = stats.get("points_std_dev", pts * 0.18)
+        form = stats.get("form_factor", 1)
 
-        pts = (
-            stats.get("points")
-            or stats.get("avgPoints")
-            or stats.get("pointsPerGame")
-            or 6
-        )
-
-        reb = (
-            stats.get("rebounds")
-            or stats.get("avgRebounds")
-            or stats.get("reboundsPerGame")
-            or 3
-        )
-
-        ast = (
-            stats.get("assists")
-            or stats.get("avgAssists")
-            or stats.get("assistsPerGame")
-            or 2
-        )
-
-    # ===============================
-    # HARD PROTECTION AGAINST ZERO
-    # ===============================
     if not minutes or minutes == 0:
-        print("⚠️ MINUTES = 0 → FORCING 18")
         minutes = 18
 
-    # ===============================
-    # RATE CALCULATIONS
-    # ===============================
     ppm = pts / minutes if minutes else 0
     rpm = reb / minutes if minutes else 0
     apm = ast / minutes if minutes else 0
@@ -121,10 +87,9 @@ async def normalize_player(raw):
         "usage_rate": round(usage, 3),
         "points_per_min": round(ppm, 3),
         "reb_per_min": round(rpm, 3),
-        "ast_per_min": round(apm, 3)
+        "ast_per_min": round(apm, 3),
+        "points_std_dev": std,
+        "form_factor": form
     }
 
-    print("✅ NORMALIZED →", normalized)
-
     return normalized
-   

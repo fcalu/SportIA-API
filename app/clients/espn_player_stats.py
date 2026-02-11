@@ -1,14 +1,17 @@
 import httpx
+import statistics
 
-BASE = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
+BASE_STATS = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
+BASE_GAMELOG = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
 
-
+# ==========================================================
+# BLEND SEASON STATS
+# ==========================================================
 def blend_stats(current, previous, current_games=50):
 
     if not previous:
         return current
 
-    # ajuste early season
     if current_games < 20:
         w_current = 0.5
         w_prev = 0.5
@@ -17,38 +20,44 @@ def blend_stats(current, previous, current_games=50):
         w_prev = 0.3
 
     return {
+        "games": current["games"],
         "minutes": current["minutes"] * w_current + previous["minutes"] * w_prev,
         "points": current["points"] * w_current + previous["points"] * w_prev,
         "rebounds": current["rebounds"] * w_current + previous["rebounds"] * w_prev,
         "assists": current["assists"] * w_current + previous["assists"] * w_prev
     }
 
-
+# ==========================================================
+# GET PLAYER STATS + GAMELOG + VARIANCE
+# ==========================================================
 async def get_player_stats(player_id: str):
 
-    url = f"{BASE}/{player_id}/stats"
-
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(url)
 
-        if r.status_code != 200:
+        # ===============================
+        # SEASON STATS
+        # ===============================
+        stats_url = f"{BASE_STATS}/{player_id}/stats"
+        stats_res = await client.get(stats_url)
+
+        if stats_res.status_code != 200:
             return None
 
-        data = r.json()
+        stats_data = stats_res.json()
 
-    try:
-        categories = data.get("categories", [])
-
+        categories = stats_data.get("categories", [])
         averages = next(
-            c for c in categories if c.get("name") == "averages"
+            (c for c in categories if c.get("name") == "averages"),
+            None
         )
 
-        stats_list = averages.get("statistics", [])
+        if not averages:
+            return None
 
+        stats_list = averages.get("statistics", [])
         if not stats_list:
             return None
 
-        # ordenar temporadas
         seasons_sorted = sorted(
             stats_list,
             key=lambda x: x["season"]["year"],
@@ -74,10 +83,46 @@ async def get_player_stats(player_id: str):
             current_games=current["games"]
         )
 
-        print("🧪 BLENDED STATS:", blended)
+        # ===============================
+        # GAME LOG (últimos 10)
+        # ===============================
+        gamelog_url = f"{BASE_GAMELOG}/{player_id}/gamelog"
+        gl_res = await client.get(gamelog_url)
 
-        return blended
+        recent_points = []
+        recent_minutes = []
 
-    except Exception as e:
-        print("❌ BLEND PARSE ERROR:", e)
-        return None
+        if gl_res.status_code == 200:
+            gl_data = gl_res.json()
+            events = gl_data.get("events", [])[:10]
+
+            for game in events:
+                stats = game.get("statistics", {})
+                pts = float(stats.get("points", 0))
+                mins = float(stats.get("minutes", 0))
+
+                if mins > 0:
+                    recent_points.append(pts)
+                    recent_minutes.append(mins)
+
+        # ===============================
+        # VARIANCE REAL
+        # ===============================
+        if len(recent_points) >= 5:
+            std_points = statistics.stdev(recent_points)
+            avg_last5 = sum(recent_points[:5]) / min(5, len(recent_points))
+        else:
+            std_points = blended["points"] * 0.18
+            avg_last5 = blended["points"]
+
+        season_avg = blended["points"]
+        form_factor = (avg_last5 / season_avg) if season_avg > 0 else 1
+
+        return {
+            "minutes": blended["minutes"],
+            "points": blended["points"],
+            "rebounds": blended["rebounds"],
+            "assists": blended["assists"],
+            "points_std_dev": round(std_points, 2),
+            "form_factor": round(form_factor, 3)
+        }

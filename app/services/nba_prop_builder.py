@@ -36,7 +36,7 @@ def build_nba_props_from_roster(players, player_status):
         assist_boost = redistribute_assists(p, freed_assists)
 
         # Aplicamos los multiplicadores a las tasas por minuto
-        adj_points_rate = p["points_per_min"] * (1 + usage_boost)
+        adj_points_rate = p["points_per_min"] * (1 + usage_boost) * p.get("form_factor", 1)
         adj_reb_rate = p["reb_per_min"] * (1 + rebound_boost)
         adj_ast_rate = p["ast_per_min"] * (1 + assist_boost)
 
@@ -121,7 +121,7 @@ def build_prop(player, prop_type, projection, min_proj, pts_r, reb_r, ast_r):
         "type": prop_type,
         "projection_model": {
             "mean": round(projection, 2),
-            "std_dev": round(projection * 0.18, 2) # Estimación de varianza NBA
+            "std_dev": round(player.get("points_std_dev", projection * 0.18), 2)
         },
         "projected_minutes": round(min_proj, 2),
         "usage_rate": player["usage_rate"],
