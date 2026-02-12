@@ -12,12 +12,8 @@ def safe_float(value, default):
 
 
 # ==========================================================
-# 🏀 NBA PROJECTION ENGINE (UPGRADED)
+# 🏀 NBA PROJECTION ENGINE
 # ==========================================================
-# ==========================================
-# 🏀 WSPM NBA PROJECTION ENGINE + BLOWOUT
-# ==========================================
-
 def wspm_nba_projection(prop, odds, script):
 
     mean = prop["projection_model"]["mean"]
@@ -26,11 +22,8 @@ def wspm_nba_projection(prop, odds, script):
 
     spread = abs(float(odds.get("spread", 0))) if odds else 0
 
-    # ======================================
-    # 🧨 BLOWOUT MODEL (APLICACIÓN REAL)
-    # ======================================
+    # Blowout logic
     if spread >= 15:
-
         if 15 <= spread < 20:
             primary_cut = 0.15
             bench_boost = 0.08
@@ -49,9 +42,6 @@ def wspm_nba_projection(prop, odds, script):
 
         std_dev *= (1 + variance_boost)
 
-    # ======================================
-    # SCRIPT ADJUSTMENT
-    # ======================================
     if script == "high_scoring":
         mean *= 1.03
     elif script == "defensive":
@@ -63,8 +53,9 @@ def wspm_nba_projection(prop, odds, script):
         "projected_minutes": round(minutes, 2)
     }
 
+
 # ==========================================================
-# 🏈 NFL PROJECTION ENGINE (UPGRADED)
+# 🏈 NFL PROJECTION ENGINE
 # ==========================================================
 def wspm_nfl_projection(prop, odds, script):
 
@@ -75,7 +66,13 @@ def wspm_nfl_projection(prop, odds, script):
     spread = safe_float(odds.get("spread"), 0)
 
     plays = 68 if total > 50 else 58 if total < 40 else 63
-    pass_boost, rush_boost = (1.12, 0.93) if script == "high_scoring" else (0.90, 1.10) if script == "low_scoring" else (1.0, 1.0)
+
+    if script == "high_scoring":
+        pass_boost, rush_boost = 1.12, 0.93
+    elif script == "low_scoring":
+        pass_boost, rush_boost = 0.90, 1.10
+    else:
+        pass_boost, rush_boost = 1.0, 1.0
 
     if "passing yards" in prop_type:
         attempts = 34 + (5 if spread > 6 else -4 if spread < -6 else 0)
@@ -86,7 +83,6 @@ def wspm_nfl_projection(prop, odds, script):
     else:
         mean = safe_float(prop.get("line"), 0)
 
-    # 📊 Varianza histórica NFL props
     std_dev = mean * 0.22 if mean > 0 else 1
 
     return {
@@ -96,7 +92,7 @@ def wspm_nfl_projection(prop, odds, script):
 
 
 # ==========================================================
-# ⚽ POISSON SOCCER MODEL (NO CAMBIA)
+# ⚽ POISSON SOCCER MODEL
 # ==========================================================
 def poisson_pmf(lmbda, k):
     return (lmbda ** k) * math.exp(-lmbda) / math.factorial(k)
@@ -109,15 +105,27 @@ def build_score_matrix(home_xg, away_xg, max_goals=6):
     return matrix
 
 
-def market_probs_from_matrix(matrix):
+# ==========================================================
+# ⚽ DERIVE ALL MARKETS FROM MATRIX
+# ==========================================================
+def derive_soccer_markets(matrix, market_line):
 
-    over25 = btts = home_win = draw = away_win = 0
+    over = 0
+    under = 0
+    home_win = 0
+    draw = 0
+    away_win = 0
+    btts_yes = 0
 
     for (h, a), p in matrix.items():
-        if h + a >= 3:
-            over25 += p
-        if h > 0 and a > 0:
-            btts += p
+
+        # Totales dinámicos
+        if h + a > market_line:
+            over += p
+        else:
+            under += p
+
+        # 1X2
         if h > a:
             home_win += p
         elif h == a:
@@ -125,31 +133,29 @@ def market_probs_from_matrix(matrix):
         else:
             away_win += p
 
+        # BTTS
+        if h > 0 and a > 0:
+            btts_yes += p
+
     return {
-        "over_2_5": round(over25, 3),
-        "btts": round(btts, 3),
-        "home_win": round(home_win, 3),
-        "draw": round(draw, 3),
-        "away_win": round(away_win, 3),
+        "over": round(over, 4),
+        "under": round(under, 4),
+        "home_win": round(home_win, 4),
+        "draw": round(draw, 4),
+        "away_win": round(away_win, 4),
+        "btts_yes": round(btts_yes, 4),
+        "btts_no": round(1 - btts_yes, 4),
+        "double_chance_home": round(home_win + draw, 4),
+        "double_chance_away": round(away_win + draw, 4)
     }
 
 
 # ==========================================================
-# ⚽ SOCCER PROJECTION ENGINE (SIGUE IGUAL)
+# ⚽ SOCCER PROJECTION ENGINE (FINAL VERSION)
 # ==========================================================
-def wspm_soccer_projection(market, odds, script, league):
-
-    total = safe_float(odds.get("over_under"), 2.5)
-    spread = abs(safe_float(odds.get("spread"), 0))
-
-    if spread >= 1:
-        home_xg = total * 0.65
-        away_xg = total * 0.35
-    else:
-        home_xg = total * 0.52
-        away_xg = total * 0.48
+def wspm_soccer_projection(home_xg, away_xg, market_line):
 
     matrix = build_score_matrix(home_xg, away_xg)
-    probs = market_probs_from_matrix(matrix)
+    markets = derive_soccer_markets(matrix, market_line)
 
-    return probs.get(market)
+    return markets
