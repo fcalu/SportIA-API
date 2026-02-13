@@ -129,84 +129,75 @@ async def ai_predict(req):
         # ⚽ SOCCER — POISSON REAL MODEL
         # ==========================================================
         elif sport == "soccer":
-
-            from app.services.wspm_engine import build_score_matrix
-
+    
             home_id, away_id = await get_event_teams(sport, league, event_id)
             home_stats = await get_team_stats(league, home_id)
             away_stats = await get_team_stats(league, away_id)
 
             xg = expected_goals_match(home_stats, away_stats, league)
 
-            home_xg = xg["home_xg"]
-            away_xg = xg["away_xg"]
-
             total_line = safe_float(odds.get("over_under"), 2.5)
 
-            # 🔢 Build Poisson matrix
-            matrix = build_score_matrix(home_xg, away_xg)
+            from app.services.wspm_engine import build_score_matrix, derive_soccer_markets
 
-            cutoff = int(total_line)
+            matrix = build_score_matrix(xg["home_xg"], xg["away_xg"])
+            markets = derive_soccer_markets(matrix, total_line)
 
-            p_under = sum(
-                p for (h, a), p in matrix.items()
-                if (h + a) <= cutoff
-            )
+            player_props = []
 
-            p_over = 1 - p_under
-
-            # 🎯 American odds → implied probability
-            def implied_prob(american_odds):
-                american_odds = safe_float(american_odds, -110)
-                if american_odds > 0:
-                    return 100 / (american_odds + 100)
-                else:
-                    return abs(american_odds) / (abs(american_odds) + 100)
-
-            market_prob_over_raw = implied_prob(odds.get("over_odds"))
-            market_prob_under_raw = implied_prob(odds.get("under_odds"))
-
-            # Remove vig
-            total_market = market_prob_over_raw + market_prob_under_raw
-            market_prob_over = market_prob_over_raw / total_market
-            market_prob_under = market_prob_under_raw / total_market
-
-            edge_over = p_over - market_prob_over
-            edge_under = p_under - market_prob_under
-
-            if edge_under > 0.03:
-                bet_decision = "UNDER"
-                bet_tier = "VALUE BET"
-            elif edge_over > 0.03:
-                bet_decision = "OVER"
-                bet_tier = "VALUE BET"
-            else:
-                bet_decision = "PASS"
-                bet_tier = "NO BET"
-
-            player_props = [{
+            # 🔹 TOTAL GOALS
+            player_props.append({
                 "name": "Match Total Goals",
                 "role": "team",
                 "type": "total_goals",
                 "line": total_line,
-                "projection_model": {
-                    "home_xg": round(home_xg, 2),
-                    "away_xg": round(away_xg, 2),
-                    "total_xg": round(home_xg + away_xg, 2)
-                },
-                "over_odds": odds.get("over_odds", -110),
-                "under_odds": odds.get("under_odds", -110),
-                "model_prob_over": round(p_over, 4),
-                "model_prob_under": round(p_under, 4),
-                "market_prob_over": round(market_prob_over, 4),
-                "market_prob_under": round(market_prob_under, 4),
-                "edge_over": round(edge_over, 4),
-                "edge_under": round(edge_under, 4),
-                "bet_decision": bet_decision,
-                "bet_tier": bet_tier,
-                "confidence": 60,
+                "projection_model": xg,
+                "model_prob_over": markets["over"],
+                "model_prob_under": markets["under"],
+                "over_odds": odds.get("over_odds"),
+                "under_odds": odds.get("under_odds"),
                 "is_active": True
-            }]
+            })
+
+            # 🔹 MONEYLINE
+            player_props.append({
+                "name": "Match Result",
+                "role": "team",
+                "type": "moneyline",
+                "projection_model": xg,
+                "model_prob_home": markets["home_win"],
+                "model_prob_draw": markets["draw"],
+                "model_prob_away": markets["away_win"],
+                "home_odds": odds.get("home_moneyline"),
+                "draw_odds": odds.get("draw_odds"),
+                "away_odds": odds.get("away_moneyline"),
+                "is_active": True
+            })
+
+            # 🔹 BTTS
+            player_props.append({
+                "name": "Both Teams To Score",
+                "role": "team",
+                "type": "btts",
+                "projection_model": xg,
+                "model_prob_yes": markets["btts_yes"],
+                "model_prob_no": markets["btts_no"],
+                "yes_odds": odds.get("btts_yes_odds"),
+                "no_odds": odds.get("btts_no_odds"),
+                "is_active": True
+            })
+
+            # 🔹 DOUBLE CHANCE
+            player_props.append({
+                "name": "Double Chance Home",
+                "role": "team",
+                "type": "double_chance",
+                "projection_model": xg,
+                "model_prob_home": markets["double_chance_home"],
+                "home_odds": odds.get("home_double_chance_odds"),
+                "is_active": True
+            })
+
 
         # ==========================================================
         # 💰 TRADING ENGINE (NBA & NFL ONLY)
