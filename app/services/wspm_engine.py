@@ -29,6 +29,87 @@ def implied_probability(odds):
 
 
 # ==========================================================
+# 🏀 NBA PROJECTION ENGINE
+# ==========================================================
+def wspm_nba_projection(prop, odds, script):
+
+    mean = prop["projection_model"]["mean"]
+    std_dev = prop["projection_model"]["std_dev"]
+    minutes = prop.get("projected_minutes", 30)
+
+    spread = abs(float(odds.get("spread", 0))) if odds else 0
+
+    # Blowout adjustment
+    if spread >= 15:
+
+        if 15 <= spread < 20:
+            primary_cut = 0.15
+            bench_boost = 0.08
+            variance_boost = 0.15
+        else:
+            primary_cut = 0.22
+            bench_boost = 0.12
+            variance_boost = 0.22
+
+        if prop.get("role") == "Primary":
+            mean *= (1 - primary_cut)
+            minutes *= (1 - primary_cut)
+        else:
+            mean *= (1 + bench_boost)
+            minutes *= (1 + bench_boost)
+
+        std_dev *= (1 + variance_boost)
+
+    if script == "high_scoring":
+        mean *= 1.03
+    elif script == "defensive":
+        mean *= 0.97
+
+    return {
+        "mean": round(mean, 2),
+        "std_dev": round(std_dev, 2),
+        "projected_minutes": round(minutes, 2)
+    }
+
+
+# ==========================================================
+# 🏈 NFL PROJECTION ENGINE
+# ==========================================================
+def wspm_nfl_projection(prop, odds, script):
+
+    prop_type = prop.get("type", "").lower()
+    role = prop.get("role", "").lower()
+
+    total = safe_float(odds.get("over_under"), 44)
+    spread = safe_float(odds.get("spread"), 0)
+
+    plays = 68 if total > 50 else 58 if total < 40 else 63
+
+    if script == "high_scoring":
+        pass_boost, rush_boost = 1.12, 0.93
+    elif script == "low_scoring":
+        pass_boost, rush_boost = 0.90, 1.10
+    else:
+        pass_boost, rush_boost = 1.0, 1.0
+
+    if "passing yards" in prop_type:
+        attempts = 34 + (5 if spread > 6 else -4 if spread < -6 else 0)
+        mean = attempts * 7.2 * pass_boost
+    elif "rushing yards" in prop_type:
+        share = 0.58 if "rb" in role else 0.18
+        mean = plays * share * 4.3 * rush_boost
+    else:
+        mean = safe_float(prop.get("line"), 0)
+
+    std_dev = mean * 0.22 if mean > 0 else 1
+
+    return {
+        "mean": round(mean, 2),
+        "std_dev": round(std_dev, 2)
+    }
+
+
+# ==========================================================
 # ⚽ POISSON SOCCER CORE
 # ==========================================================
 def poisson_pmf(lmbda, k):
@@ -37,16 +118,11 @@ def poisson_pmf(lmbda, k):
 
 def build_score_matrix(home_xg, away_xg, max_goals=6):
     matrix = {}
-
     for h, a in product(range(max_goals + 1), repeat=2):
         matrix[(h, a)] = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a)
-
     return matrix
 
 
-# ==========================================================
-# ⚽ DERIVE ALL MARKETS FROM SCORE MATRIX
-# ==========================================================
 def derive_soccer_markets(matrix, market_line):
 
     over = under = 0
@@ -55,13 +131,11 @@ def derive_soccer_markets(matrix, market_line):
 
     for (h, a), p in matrix.items():
 
-        # Totals
         if h + a > market_line:
             over += p
         else:
             under += p
 
-        # 1X2
         if h > a:
             home_win += p
         elif h == a:
@@ -69,7 +143,6 @@ def derive_soccer_markets(matrix, market_line):
         else:
             away_win += p
 
-        # BTTS
         if h > 0 and a > 0:
             btts_yes += p
 
@@ -87,64 +160,32 @@ def derive_soccer_markets(matrix, market_line):
 
 
 # ==========================================================
-# ⚖️ MARKET CALIBRATION ENGINE (PRO VERSION)
-# ==========================================================
-def calibrate_xg_with_market(home_xg, away_xg, odds):
-
-    if not odds:
-        return home_xg, away_xg
-
-    home_ml = odds.get("home_moneyline")
-    away_ml = odds.get("away_moneyline")
-    draw_ml = odds.get("draw_odds")
-
-    if home_ml is None or away_ml is None:
-        return home_xg, away_xg
-
-    # Convert to implied probabilities
-    home_prob = implied_probability(home_ml)
-    away_prob = implied_probability(away_ml)
-    draw_prob = implied_probability(draw_ml) if draw_ml else 0
-
-    # Remove overround
-    total = home_prob + away_prob + draw_prob
-
-    if total <= 0:
-        return home_xg, away_xg
-
-    home_prob /= total
-    away_prob /= total
-    draw_prob /= total
-
-    # Market strength difference
-    strength_diff = home_prob - away_prob
-
-    # Controlled adjustment (anti-overfit)
-    adjustment_factor = 0.55  # 0.45–0.65 ideal range
-
-    adjustment = strength_diff * adjustment_factor
-
-    # Clamp adjustment to avoid crazy distortions
-    adjustment = max(min(adjustment, 0.25), -0.25)
-
-    home_xg *= (1 + adjustment)
-    away_xg *= (1 - adjustment)
-
-    return home_xg, away_xg
-
-
-# ==========================================================
-# ⚽ FINAL SOCCER PROJECTION ENGINE
+# ⚽ SOCCER PROJECTION ENGINE
 # ==========================================================
 def wspm_soccer_projection(home_xg, away_xg, market_line, odds=None):
 
-    # Step 1️⃣ Market calibration
-    home_xg, away_xg = calibrate_xg_with_market(home_xg, away_xg, odds)
+    # Optional calibration
+    if odds:
+        home_ml = odds.get("home_moneyline")
+        away_ml = odds.get("away_moneyline")
 
-    # Step 2️⃣ Build score matrix
+        if home_ml and away_ml:
+
+            home_prob = implied_probability(home_ml)
+            away_prob = implied_probability(away_ml)
+
+            total = home_prob + away_prob
+
+            if total > 0:
+                home_prob /= total
+                away_prob /= total
+
+                diff = home_prob - away_prob
+                adjustment = max(min(diff * 0.55, 0.25), -0.25)
+
+                home_xg *= (1 + adjustment)
+                away_xg *= (1 - adjustment)
+
     matrix = build_score_matrix(home_xg, away_xg)
 
-    # Step 3️⃣ Derive markets
-    markets = derive_soccer_markets(matrix, market_line)
-
-    return markets
+    return derive_soccer_markets(matrix, market_line)
