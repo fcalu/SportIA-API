@@ -1,14 +1,29 @@
 import math
 from itertools import product
 
+
 # ==========================================================
 # 🛡️ SAFE FLOAT
 # ==========================================================
-def safe_float(value, default):
+def safe_float(value, default=0):
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+# ==========================================================
+# 📊 IMPLIED PROBABILITY (AMERICAN ODDS)
+# ==========================================================
+def implied_probability(odds):
+
+    if odds is None:
+        return None
+
+    if odds > 0:
+        return 100 / (odds + 100)
+    else:
+        return abs(odds) / (abs(odds) + 100)
 
 
 # ==========================================================
@@ -106,20 +121,17 @@ def build_score_matrix(home_xg, away_xg, max_goals=6):
 
 
 # ==========================================================
-# ⚽ DERIVE ALL MARKETS FROM MATRIX
+# ⚽ DERIVE MARKETS FROM MATRIX
 # ==========================================================
 def derive_soccer_markets(matrix, market_line):
 
-    over = 0
-    under = 0
-    home_win = 0
-    draw = 0
-    away_win = 0
+    over = under = 0
+    home_win = draw = away_win = 0
     btts_yes = 0
 
     for (h, a), p in matrix.items():
 
-        # Totales dinámicos
+        # TOTALS
         if h + a > market_line:
             over += p
         else:
@@ -151,9 +163,33 @@ def derive_soccer_markets(matrix, market_line):
 
 
 # ==========================================================
-# ⚽ SOCCER PROJECTION ENGINE (FINAL VERSION)
+# ⚽ SOCCER PROJECTION ENGINE (CALIBRATED VERSION)
 # ==========================================================
-def wspm_soccer_projection(home_xg, away_xg, market_line):
+def wspm_soccer_projection(home_xg, away_xg, market_line, odds=None):
+
+    # 🔥 MARKET CALIBRATION (ANTI-FANTASY SYSTEM)
+    if odds:
+
+        home_ml = odds.get("home_moneyline")
+        away_ml = odds.get("away_moneyline")
+
+        if home_ml and away_ml:
+
+            home_market_prob = implied_probability(home_ml)
+            away_market_prob = implied_probability(away_ml)
+
+            total_market = home_market_prob + away_market_prob
+
+            if total_market > 0:
+                home_market_prob /= total_market
+                away_market_prob /= total_market
+
+                strength_diff = home_market_prob - away_market_prob
+
+                adjustment_factor = 0.5  # puedes mover entre 0.4 - 0.7
+
+                home_xg *= (1 + strength_diff * adjustment_factor)
+                away_xg *= (1 - strength_diff * adjustment_factor)
 
     matrix = build_score_matrix(home_xg, away_xg)
     markets = derive_soccer_markets(matrix, market_line)
