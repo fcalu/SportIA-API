@@ -23,30 +23,27 @@ async def get_team_stats(league, team_id, last_n=25):
         comp = competitions[0]
         status = comp.get("status", {}).get("type", {}).get("completed", False)
 
-        # Solo partidos ya jugados
         if not status:
             continue
 
         competitors = comp.get("competitors", [])
-
         if len(competitors) != 2:
             continue
 
         for team in competitors:
-            if team["team"]["id"] == str(team_id):
-                score_data = team.get("score", {})
-                team_score = int(score_data.get("value", 0))
+            score_data = team.get("score") or {}
+            team_score = int(score_data.get("value", 0))
+
+            if str(team["team"]["id"]) == str(team_id):
                 goals_for += team_score
             else:
-                opp_score = int(team.get("score", 0))
-                goals_against += opp_score
+                goals_against += team_score
 
         games_played += 1
 
         if games_played >= last_n:
             break
 
-    # Protección mínima
     if games_played == 0:
         return {
             "goals_for": 1.3,
