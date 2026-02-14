@@ -66,38 +66,71 @@ def validate_model_projection(prop):
 # 📊 EDGE MATEMÁTICO REAL
 # ==========================================================
 def calculate_betting_edge(prop):
+    
+    market_type = prop.get("type")
 
-    model_data = prop.get("projection_model", {})
+    # ======================================================
+    # ⚽ MONEYLINE (NO PASA POR OVER/UNDER)
+    # ======================================================
+    if market_type == "moneyline":
+        # Aquí no usamos prob_over / prob_under
+        # El edge debería calcularse en otro módulo específico 1X2
+        prop["edge_over"] = 0
+        prop["edge_under"] = 0
+        return prop
 
-    # 🛡️ COMPATIBILIDAD TOTAL
-    if isinstance(model_data, dict):
-        mean = float(model_data.get("mean", 0))
-        std = float(model_data.get("std_dev", 1))
+    # ======================================================
+    # ⚽ SOCCER TOTALS Y BTTS (YA VIENEN CON PROB REAL)
+    # ======================================================
+    if market_type in ["total_goals", "btts"]:
+
+        if market_type == "btts":
+            model_over = prop.get("model_prob_yes")
+            model_under = prop.get("model_prob_no")
+        else:
+            model_over = prop.get("model_prob_over")
+            model_under = prop.get("model_prob_under")
+
+    # ======================================================
+    # 🏀🏈 NORMAL DISTRIBUTION (NBA / NFL)
+    # ======================================================
     else:
-        mean = float(model_data)
-        std = max(mean * 0.2, 1)
-        prop["projection_model"] = {"mean": mean, "std_dev": std}
+        model_data = prop.get("projection_model", {})
 
-    line = float(prop.get("line", 0))
+        if isinstance(model_data, dict):
+            mean = float(model_data.get("mean", 0))
+            std = float(model_data.get("std_dev", 1))
+        else:
+            mean = float(model_data)
+            std = max(mean * 0.2, 1)
+            prop["projection_model"] = {"mean": mean, "std_dev": std}
 
-    over_odds = float(prop.get("over_odds", -110))
-    under_odds = float(prop.get("under_odds", -110))
+        line = float(prop.get("line", 0))
 
-    model_over = prob_over(line, mean, std)
-    model_under = prob_under(line, mean, std)
+        model_over = prob_over(line, mean, std)
+        model_under = prob_under(line, mean, std)
 
-    market_over, market_under = no_vig_prob(over_odds, under_odds)
+    # ======================================================
+    # 💰 MARKET PROBABILITIES
+    # ======================================================
+
+    over_odds = prop.get("over_odds")
+    under_odds = prop.get("under_odds")
+
+    if over_odds is not None and under_odds is not None:
+        market_over, market_under = no_vig_prob(over_odds, under_odds)
+    else:
+        market_over, market_under = 0, 0
 
     prop["model_prob_over"] = model_over
     prop["model_prob_under"] = model_under
     prop["market_prob_over"] = market_over
     prop["market_prob_under"] = market_under
 
-    prop["edge_over"] = round(model_over - market_over, 4)
-    prop["edge_under"] = round(model_under - market_under, 4)
+    prop["edge_over"] = round((model_over or 0) - market_over, 4)
+    prop["edge_under"] = round((model_under or 0) - market_under, 4)
 
     return prop
-
 
 # ==========================================================
 # 🧠 EDGE AJUSTADO POR FIABILIDAD
