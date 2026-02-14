@@ -11,11 +11,25 @@ async def get_team_stats(league, team_id):
 
     stats = data.get("team", {}).get("statistics", [])
 
-    stat_map = {s["name"]: s["displayValue"] for s in stats}
+    stat_map = {}
+
+    for s in stats:
+        name = s.get("name")
+        value = s.get("value")  # 🔥 usar value, no displayValue
+
+        if name and value is not None:
+            stat_map[name] = value
+
+    goals_for = float(stat_map.get("goalsFor", 0))
+    goals_against = float(stat_map.get("goalsAgainst", 0))
+    games_played = float(stat_map.get("gamesPlayed", 1))
+
+    # 🔥 Protección contra división absurda
+    if games_played <= 0:
+        games_played = 1
 
     return {
-        "goals_for": stat_map.get("goalsFor", 1.4),
-        "goals_against": stat_map.get("goalsAgainst", 1.4),
-        "shots": stat_map.get("shots", 12),
-        "shots_on_target": stat_map.get("shotsOnTarget", 4)
+        "goals_for": goals_for,
+        "goals_against": goals_against,
+        "games_played": games_played
     }
