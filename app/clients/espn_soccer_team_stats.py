@@ -2,56 +2,56 @@ import httpx
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 
-
-async def get_team_stats(league, team_id):
-    url = f"{BASE}/{league}/teams/{team_id}?enable=stats"
+async def get_team_stats(league, team_id, last_n=25):
+    url = f"{BASE}/{league}/teams/{team_id}/schedule?limit=50"
 
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
         data = r.json()
 
-    stats = (
-        data.get("team", {})
-            .get("record", {})
-            .get("items", [{}])[0]
-            .get("stats", [])
-    )
+    events = data.get("events", [])
 
-    stat_map = {}
+    goals_for = 0
+    goals_against = 0
+    games_played = 0
 
-    for s in stats:
-        name = s.get("name")
+    for event in events:
+        competitions = event.get("competitions", [])
+        if not competitions:
+            continue
 
-        value = (
-            s.get("value")
-            or s.get("displayValue")
-            or s.get("stat")
-        )
+        comp = competitions[0]
+        status = comp.get("status", {}).get("type", {}).get("completed", False)
 
-        if name and value not in [None, ""]:
-            try:
-                stat_map[name] = float(value)
-            except:
-                continue
+        # Solo partidos ya jugados
+        if not status:
+            continue
 
-    # 🔥 FIX REAL AQUÍ
-    goals_for = (
-        stat_map.get("goalsFor")
-        or stat_map.get("pointsFor")
-        or stat_map.get("goals")
-        or 0
-    )
+        competitors = comp.get("competitors", [])
 
-    goals_against = (
-        stat_map.get("goalsAgainst")
-        or stat_map.get("pointsAgainst")
-        or 0
-    )
+        if len(competitors) != 2:
+            continue
 
-    games_played = stat_map.get("gamesPlayed") or 0
+        for team in competitors:
+            if team["team"]["id"] == str(team_id):
+                team_score = int(team.get("score", 0))
+                goals_for += team_score
+            else:
+                opp_score = int(team.get("score", 0))
+                goals_against += opp_score
 
-    if games_played <= 0:
-        games_played = 1  # evitar división por cero
+        games_played += 1
+
+        if games_played >= last_n:
+            break
+
+    # Protección mínima
+    if games_played == 0:
+        return {
+            "goals_for": 1.3,
+            "goals_against": 1.3,
+            "games_played": 10
+        }
 
     return {
         "goals_for": goals_for,
