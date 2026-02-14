@@ -1,5 +1,5 @@
 # =========================================
-# ⚽ SOCCER EXPECTED GOALS MODEL (CALIBRATED)
+# ⚽ SOCCER EXPECTED GOALS MODEL (IMPROVED)
 # =========================================
 
 def safe_float(v, default=0):
@@ -12,20 +12,21 @@ def safe_float(v, default=0):
 # =========================================
 # 🎯 CONFIGURACIÓN BASE LIGA
 # =========================================
-# Puedes personalizar por liga
 LEAGUE_BASELINES = {
     "mex.1": 2.6,
     "fra.1": 2.5,
     "eng.1": 2.8,
     "esp.1": 2.6,
+    "ned.1": 3.0,   # Eredivisie más goleadora
     "default": 2.5
 }
 
-HOME_ADVANTAGE = 1.08  # ~8% boost local
+HOME_ADVANTAGE = 1.08
+REGRESSION_WEIGHT = 0.30   # antes era 0.50 implícito
 
 
 # =========================================
-# 📊 TEAM STRENGTH (REGRESIÓN A LA MEDIA)
+# 📊 TEAM STRENGTH
 # =========================================
 def calculate_team_strength(team_stats, league_avg):
 
@@ -36,9 +37,18 @@ def calculate_team_strength(team_stats, league_avg):
     gf_per_game = goals_for / games
     ga_per_game = goals_against / games
 
-    # Regresión hacia promedio liga (evita extremos)
-    attack_strength = (gf_per_game + league_avg / 2) / 2
-    defense_strength = (ga_per_game + league_avg / 2) / 2
+    league_half = league_avg / 2
+
+    # 🔥 Regresión ponderada realista
+    attack_strength = (
+        (1 - REGRESSION_WEIGHT) * gf_per_game
+        + REGRESSION_WEIGHT * league_half
+    )
+
+    defense_strength = (
+        (1 - REGRESSION_WEIGHT) * ga_per_game
+        + REGRESSION_WEIGHT * league_half
+    )
 
     return attack_strength, defense_strength
 
@@ -53,20 +63,21 @@ def expected_goals_match(home_stats, away_stats, league="default"):
     home_attack, home_def = calculate_team_strength(home_stats, league_avg)
     away_attack, away_def = calculate_team_strength(away_stats, league_avg)
 
-    # Modelo multiplicativo ajustado
+    # Modelo multiplicativo clásico
     home_xg = home_attack * away_def / (league_avg / 2)
     away_xg = away_attack * home_def / (league_avg / 2)
 
-    # Aplicar ventaja local
+    # Ventaja local
     home_xg *= HOME_ADVANTAGE
 
     total_xg = home_xg + away_xg
 
-    # 🔒 Calibración final hacia promedio liga
-    calibration_factor = league_avg / max(total_xg, 0.01)
-    total_xg *= calibration_factor
-    home_xg *= calibration_factor
-    away_xg *= calibration_factor
+    # 🔥 Suavizado ligero SOLO si hay extremos absurdos
+    if total_xg > league_avg * 1.8:
+        shrink = league_avg * 1.8 / total_xg
+        home_xg *= shrink
+        away_xg *= shrink
+        total_xg = home_xg + away_xg
 
     return {
         "home_xg": round(home_xg, 2),
