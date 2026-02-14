@@ -16,14 +16,30 @@ async def get_team_stats(league, team_id):
         r = await client.get(url)
         data = r.json()
 
-    stats = data.get("team", {}).get("statistics", [])
+    team = data.get("team", {})
+    stats = team.get("statistics", [])
 
-    stat_map = {s["name"]: s["displayValue"] for s in stats}
+    goals_for = 0
+    goals_against = 0
+    games_played = 0
+
+    for stat in stats:
+        name = stat.get("name")
+        value = safe_float(stat.get("value"))
+
+        if name == "goalsFor":
+            goals_for = value
+        elif name == "goalsAgainst":
+            goals_against = value
+        elif name == "gamesPlayed":
+            games_played = value
+
+    # 🔒 Fallback realista si ESPN no devuelve nada
+    if games_played == 0:
+        games_played = 10
 
     return {
-        "goals_for": stat_map.get("goalsFor", 1.4),
-        "goals_against": stat_map.get("goalsAgainst", 1.4),
-        "games_played": stat_map.get("gamesPlayed", 10),  # 🔥 ESTA LÍNEA FALTABA
-        "shots": stat_map.get("shots", 12),
-        "shots_on_target": stat_map.get("shotsOnTarget", 4)
+        "goals_for": goals_for,
+        "goals_against": goals_against,
+        "games_played": games_played
     }
