@@ -258,11 +258,8 @@ async def ai_predict(req):
         # 🎯 DECISION POLICY
         # ======================================================
 
-        tipster_decisions = []
+        tipster_decisions = tipster_decision_policy(enriched_props, odds)
 
-        for p in enriched_props:
-            decisions = tipster_decision_policy(p, odds)
-            tipster_decisions.extend(decisions)
 
         # ======================================================
         # 🧠 LLM

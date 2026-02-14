@@ -1,9 +1,13 @@
 def tipster_decision_policy(props, odds):
     
+    # 🔒 Validación defensiva
+    if not isinstance(props, list):
+        return []
+
     # Filtrar solo apuestas válidas
     valid_props = [
         p for p in props
-        if p.get("bet_decision") != "PASS"
+        if isinstance(p, dict) and p.get("bet_decision") != "PASS"
     ]
 
     if not valid_props:
@@ -12,37 +16,33 @@ def tipster_decision_policy(props, odds):
     # Calcular edge máximo por prop
     for p in valid_props:
         p["max_edge"] = max(
-            p.get("edge_over", 0),
-            p.get("edge_under", 0)
+            p.get("edge_over", 0) or 0,
+            p.get("edge_under", 0) or 0
         )
 
     # Ordenar por edge descendente
     valid_props.sort(key=lambda x: x["max_edge"], reverse=True)
 
-    # Obtener máximo edge del evento
-    max_event_edge = valid_props[0]["max_edge"]
+    max_event_edge = valid_props[0]["max_edge"] or 0
 
     strategies = []
 
-    for idx, prop in enumerate(valid_props):
+    for prop in valid_props:
 
-        label = prop.get("name")
-        decision = prop.get("bet_decision")
-        line = prop.get("line")
-        edge = prop["max_edge"]
+        label = prop.get("name", "Market")
+        decision = prop.get("bet_decision", "")
+        line = prop.get("line", "")
+        edge = prop.get("max_edge", 0)
 
-        # Percentil relativo
-        relative_strength = edge / max_event_edge if max_event_edge > 0 else 0
+        if max_event_edge > 0:
+            relative_strength = edge / max_event_edge
+        else:
+            relative_strength = 0
 
-        # 🔥 Top 20% del evento
         if relative_strength >= 0.8:
             profile = "AGRESIVA"
-
-        # 🟢 50%–80%
         elif 0.5 <= relative_strength < 0.8:
             profile = "BALANCEADA"
-
-        # 🟡 Resto positivo
         else:
             profile = "CONSERVADORA"
 
