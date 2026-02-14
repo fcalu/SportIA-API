@@ -222,6 +222,10 @@ async def ai_predict(req):
 
             home_stats = await get_team_stats(league, home_id)
             away_stats = await get_team_stats(league, away_id)
+            
+            # 🔥 AGREGA ESTO AQUÍ
+            debug("HOME_STATS", home_stats)
+            debug("AWAY_STATS", away_stats)
 
             xg = expected_goals_match(
                 home_stats, away_stats, league
