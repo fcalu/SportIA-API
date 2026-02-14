@@ -59,20 +59,33 @@ def calculate_team_strength(team_stats, league_avg):
 def expected_goals_match(home_stats, away_stats, league="default"):
     
     league_avg = LEAGUE_BASELINES.get(league, LEAGUE_BASELINES["default"])
+    league_half = league_avg / 2
 
-    home_attack, home_def = calculate_team_strength(home_stats, league_avg)
-    away_attack, away_def = calculate_team_strength(away_stats, league_avg)
+    # --- Datos crudos ---
+    home_gf = safe_float(home_stats.get("goals_for"), league_half)
+    home_ga = safe_float(home_stats.get("goals_against"), league_half)
+    home_games = max(safe_float(home_stats.get("games_played"), 10), 1)
 
-    # Modelo multiplicativo clásico
-    home_xg = (home_attack * away_def) / (league_avg / 2)
-    away_xg = (away_attack * home_def) / (league_avg / 2)
+    away_gf = safe_float(away_stats.get("goals_for"), league_half)
+    away_ga = safe_float(away_stats.get("goals_against"), league_half)
+    away_games = max(safe_float(away_stats.get("games_played"), 10), 1)
 
-    # Aplicar ventaja local
-    home_xg *= HOME_ADVANTAGE
+    # --- Promedios reales ---
+    home_gf_pg = home_gf / home_games
+    home_ga_pg = home_ga / home_games
+    away_gf_pg = away_gf / away_games
+    away_ga_pg = away_ga / away_games
 
-    # 🔒 Clamp defensivo (evita absurdos)
-    home_xg = max(min(home_xg, 4.0), 0.2)
-    away_xg = max(min(away_xg, 4.0), 0.2)
+    # --- Fuerza relativa contra promedio liga ---
+    home_attack = home_gf_pg / league_half
+    home_defense = home_ga_pg / league_half
+
+    away_attack = away_gf_pg / league_half
+    away_defense = away_ga_pg / league_half
+
+    # --- Modelo multiplicativo clásico ---
+    home_xg = league_half * home_attack * away_defense * HOME_ADVANTAGE
+    away_xg = league_half * away_attack * home_defense
 
     total_xg = home_xg + away_xg
 
