@@ -11,10 +11,14 @@ from app.services.nba_prop_builder import build_nba_props_from_roster
 from app.services.ai_prop_generator import generate_ai_props
 from app.services.wspm_engine import (
     wspm_nba_projection,
-    wspm_nfl_projection,
-    build_score_matrix,
-    derive_soccer_markets
+    wspm_nfl_projection
 )
+
+from app.services.poisson_soccer import (
+    build_score_matrix,
+    derive_markets
+)
+
 from app.services.soccer_xg_model import expected_goals_match
 
 from app.services.trading_engine import (
@@ -180,9 +184,10 @@ async def ai_predict(req):
                 xg["away_xg"]
             )
 
-            markets = derive_soccer_markets(
+            markets = derive_markets(
                 matrix, total_line
             )
+
 
             player_props = [
 
