@@ -73,10 +73,10 @@ def calculate_betting_edge(prop):
     # ⚽ MONEYLINE (NO PASA POR OVER/UNDER)
     # ======================================================
     if market_type == "moneyline":
-        # Aquí no usamos prob_over / prob_under
-        # El edge debería calcularse en otro módulo específico 1X2
         prop["edge_over"] = 0
         prop["edge_under"] = 0
+        prop["market_prob_over"] = None
+        prop["market_prob_under"] = None
         return prop
 
     # ======================================================
@@ -117,10 +117,18 @@ def calculate_betting_edge(prop):
     over_odds = prop.get("over_odds")
     under_odds = prop.get("under_odds")
 
-    if over_odds is not None and under_odds is not None:
-        market_over, market_under = no_vig_prob(over_odds, under_odds)
-    else:
-        market_over, market_under = 0, 0
+    # 🔥 SI NO HAY CUOTAS → NO HAY EDGE
+    if over_odds is None or under_odds is None:
+        prop["model_prob_over"] = model_over
+        prop["model_prob_under"] = model_under
+        prop["market_prob_over"] = None
+        prop["market_prob_under"] = None
+        prop["edge_over"] = 0
+        prop["edge_under"] = 0
+        return prop
+
+    # Si sí hay cuotas reales
+    market_over, market_under = no_vig_prob(over_odds, under_odds)
 
     prop["model_prob_over"] = model_over
     prop["model_prob_under"] = model_under
