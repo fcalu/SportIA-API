@@ -34,7 +34,8 @@ async def get_team_stats(league, team_id, last_n=25):
 
         for team in competitors:
             if team["team"]["id"] == str(team_id):
-                team_score = int(team.get("score", 0))
+                score_data = team.get("score", {})
+                team_score = int(score_data.get("value", 0))
                 goals_for += team_score
             else:
                 opp_score = int(team.get("score", 0))
