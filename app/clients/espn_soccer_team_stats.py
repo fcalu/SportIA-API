@@ -22,33 +22,26 @@ async def get_team_stats(league, team_id):
 
     for s in stats:
         name = s.get("name")
-        value = s.get("value")
 
-        if name and value is not None:
-            stat_map[name] = value
+        # 🔥 ESPN soccer normalmente usa displayValue
+        value = (
+            s.get("value")
+            or s.get("displayValue")
+            or s.get("stat")
+        )
 
-    goals_for = float(pick_first(stat_map, [
-        "goalsFor",
-        "goals",
-        "pointsFor",
-        "scored"
-    ], 0))
+        if name and value not in [None, ""]:
+            try:
+                stat_map[name] = float(value)
+            except:
+                continue
 
-    goals_against = float(pick_first(stat_map, [
-        "goalsAgainst",
-        "pointsAgainst",
-        "conceded"
-    ], 0))
-
-    games_played = float(pick_first(stat_map, [
-        "gamesPlayed",
-        "games",
-        "matches",
-        "played"
-    ], 1))
+    goals_for = stat_map.get("goalsFor", stat_map.get("goals", 1.3))
+    goals_against = stat_map.get("goalsAgainst", 1.3)
+    games_played = stat_map.get("gamesPlayed", 10)
 
     if games_played <= 0:
-        games_played = 1
+        games_played = 10
 
     return {
         "goals_for": goals_for,
