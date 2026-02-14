@@ -57,27 +57,27 @@ def calculate_team_strength(team_stats, league_avg):
 # ⚽ MATCH EXPECTED GOALS
 # =========================================
 def expected_goals_match(home_stats, away_stats, league="default"):
-
+    
     league_avg = LEAGUE_BASELINES.get(league, LEAGUE_BASELINES["default"])
+    league_half = league_avg / 2
 
-    home_attack, home_def = calculate_team_strength(home_stats, league_avg)
-    away_attack, away_def = calculate_team_strength(away_stats, league_avg)
+    home_attack_raw, home_def_raw = calculate_team_strength(home_stats, league_avg)
+    away_attack_raw, away_def_raw = calculate_team_strength(away_stats, league_avg)
 
-    # Modelo multiplicativo clásico
-    home_xg = home_attack * away_def / (league_avg / 2)
-    away_xg = away_attack * home_def / (league_avg / 2)
+    # 🔥 Convertimos a índices relativos
+    home_attack = home_attack_raw / league_half
+    home_def = home_def_raw / league_half
+    away_attack = away_attack_raw / league_half
+    away_def = away_def_raw / league_half
+
+    # Modelo multiplicativo correcto
+    home_xg = league_half * home_attack * away_def
+    away_xg = league_half * away_attack * home_def
 
     # Ventaja local
     home_xg *= HOME_ADVANTAGE
 
     total_xg = home_xg + away_xg
-
-    # 🔥 Suavizado ligero SOLO si hay extremos absurdos
-    if total_xg > league_avg * 1.8:
-        shrink = league_avg * 1.8 / total_xg
-        home_xg *= shrink
-        away_xg *= shrink
-        total_xg = home_xg + away_xg
 
     return {
         "home_xg": round(home_xg, 2),
