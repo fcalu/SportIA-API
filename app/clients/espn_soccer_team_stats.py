@@ -17,24 +17,40 @@ async def get_team_stats(league, team_id):
         data = r.json()
 
     team = data.get("team", {})
-    stats = team.get("statistics", [])
+    stats_section = team.get("statistics")
 
     goals_for = 0
     goals_against = 0
     games_played = 0
 
-    for stat in stats:
-        name = stat.get("name")
-        value = safe_float(stat.get("value"))
+    if isinstance(stats_section, list):
+        # Caso plano
+        for stat in stats_section:
+            name = stat.get("name")
+            value = safe_float(stat.get("value"))
 
-        if name == "goalsFor":
-            goals_for = value
-        elif name == "goalsAgainst":
-            goals_against = value
-        elif name == "gamesPlayed":
-            games_played = value
+            if name == "goalsFor":
+                goals_for = value
+            elif name == "goalsAgainst":
+                goals_against = value
+            elif name == "gamesPlayed":
+                games_played = value
 
-    # 🔒 Fallback realista si ESPN no devuelve nada
+    elif isinstance(stats_section, dict):
+        # Caso anidado (más común en soccer)
+        for split in stats_section.get("splits", []):
+            for stat in split.get("stats", []):
+                name = stat.get("name")
+                value = safe_float(stat.get("value"))
+
+                if name == "goalsFor":
+                    goals_for = value
+                elif name == "goalsAgainst":
+                    goals_against = value
+                elif name == "gamesPlayed":
+                    games_played = value
+
+    # 🔒 Fallback inteligente
     if games_played == 0:
         games_played = 10
 
