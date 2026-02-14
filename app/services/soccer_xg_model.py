@@ -61,23 +61,19 @@ def expected_goals_match(home_stats, away_stats, league="default"):
     league_avg = LEAGUE_BASELINES.get(league, LEAGUE_BASELINES["default"])
     league_half = league_avg / 2
 
-    # ESPN YA da promedio por partido
-    home_gf_pg = safe_float(home_stats.get("goals_for"), league_half)
-    home_ga_pg = safe_float(home_stats.get("goals_against"), league_half)
+    # 🔥 Usar función correcta de fuerza
+    home_attack, home_defense = calculate_team_strength(home_stats, league_avg)
+    away_attack, away_defense = calculate_team_strength(away_stats, league_avg)
 
-    away_gf_pg = safe_float(away_stats.get("goals_for"), league_half)
-    away_ga_pg = safe_float(away_stats.get("goals_against"), league_half)
-
-    # Fuerza relativa
-    home_attack = home_gf_pg / league_half
-    home_defense = home_ga_pg / league_half
-
-    away_attack = away_gf_pg / league_half
-    away_defense = away_ga_pg / league_half
+    # Convertir a fuerza relativa
+    home_attack_rel = home_attack / league_half
+    home_def_rel = home_defense / league_half
+    away_attack_rel = away_attack / league_half
+    away_def_rel = away_defense / league_half
 
     # Modelo multiplicativo
-    home_xg = league_half * home_attack * away_defense * HOME_ADVANTAGE
-    away_xg = league_half * away_attack * home_defense
+    home_xg = league_half * home_attack_rel * away_def_rel * HOME_ADVANTAGE
+    away_xg = league_half * away_attack_rel * home_def_rel
 
     total_xg = home_xg + away_xg
 
