@@ -1,45 +1,55 @@
-def tipster_decision_policy(prop, odds):
+def tipster_decision_policy(props, odds):
     
-    label = prop.get("name") or prop.get("title") or prop.get("player") or "Market"
+    # Filtrar solo apuestas válidas
+    valid_props = [
+        p for p in props
+        if p.get("bet_decision") != "PASS"
+    ]
 
-    decision = prop.get("bet_decision", "PASS")
-    edge = max(prop.get("edge_over", 0), prop.get("edge_under", 0))
-    model_prob = max(prop.get("model_prob_over", 0), prop.get("model_prob_under", 0))
-    line = prop.get("line")
-
-    # 🔒 No sugerimos nada si no hay apuesta válida
-    if decision == "PASS":
+    if not valid_props:
         return []
+
+    # Calcular edge máximo por prop
+    for p in valid_props:
+        p["max_edge"] = max(
+            p.get("edge_over", 0),
+            p.get("edge_under", 0)
+        )
+
+    # Ordenar por edge descendente
+    valid_props.sort(key=lambda x: x["max_edge"], reverse=True)
+
+    # Obtener máximo edge del evento
+    max_event_edge = valid_props[0]["max_edge"]
 
     strategies = []
 
-    # 🔥 Alta convicción
-    if edge > 0.12 and model_prob > 0.64:
-        strategies.append({
-            "profile": "AGRESIVA",
-            "play": f"{label} → {decision} {line}",
-            "logic": "Ventaja estadística clara"
-        })
+    for idx, prop in enumerate(valid_props):
 
-    # 🟢 Balanceado (sin inventar línea)
-    elif 0.06 < edge <= 0.12:
-        strategies.append({
-            "profile": "BALANCEADA",
-            "play": f"{label} → {decision} {line}",
-            "logic": "Reducimos varianza manteniendo EV positivo"
-        })
+        label = prop.get("name")
+        decision = prop.get("bet_decision")
+        line = prop.get("line")
+        edge = prop["max_edge"]
 
-    # 🟡 Conservador contextual (alineado al edge real)
-    if (
-        prop.get("type") == "total_goals" and
-        decision == "UNDER" and
-        edge > 0.05 and
-        odds.get("home_moneyline", 0) < -250
-    ):
+        # Percentil relativo
+        relative_strength = edge / max_event_edge if max_event_edge > 0 else 0
+
+        # 🔥 Top 20% del evento
+        if relative_strength >= 0.8:
+            profile = "AGRESIVA"
+
+        # 🟢 50%–80%
+        elif 0.5 <= relative_strength < 0.8:
+            profile = "BALANCEADA"
+
+        # 🟡 Resto positivo
+        else:
+            profile = "CONSERVADORA"
+
         strategies.append({
-            "profile": "CONSERVADORA",
-            "play": f"Doble oportunidad favorito + Under {line}",
-            "logic": "Dominio esperado + baja producción de goles"
+            "profile": profile,
+            "play": f"{label} → {decision} {line}",
+            "logic": f"Edge relativo {round(relative_strength,2)} vs mejor pick del evento"
         })
 
     return strategies
