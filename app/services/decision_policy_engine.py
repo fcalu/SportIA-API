@@ -1,16 +1,15 @@
 def tipster_decision_policy(prop, odds):
     
-    # 🔒 Compatibilidad con distintos formatos de props
     label = prop.get("name") or prop.get("title") or prop.get("player") or "Market"
 
-    model_data = prop.get("projection_model", {})
-    mean = model_data.get("mean", 0)
-    std = model_data.get("std_dev", 1)
-
+    decision = prop.get("bet_decision", "PASS")
     edge = max(prop.get("edge_over", 0), prop.get("edge_under", 0))
     model_prob = max(prop.get("model_prob_over", 0), prop.get("model_prob_under", 0))
-    decision = prop.get("bet_decision", "PASS")
-    line = prop.get("line", "")
+    line = prop.get("line")
+
+    # 🔒 No sugerimos nada si no hay apuesta válida
+    if decision == "PASS":
+        return []
 
     strategies = []
 
@@ -22,20 +21,24 @@ def tipster_decision_policy(prop, odds):
             "logic": "Ventaja estadística clara"
         })
 
-    # 🟢 Balance riesgo/retorno
-    if 0.06 < edge <= 0.12:
-        safer_line = line + 1 if decision == "UNDER" else line - 1
+    # 🟢 Balanceado (sin inventar línea)
+    elif 0.06 < edge <= 0.12:
         strategies.append({
             "profile": "BALANCEADA",
-            "play": f"{label} → {decision} {safer_line}",
+            "play": f"{label} → {decision} {line}",
             "logic": "Reducimos varianza manteniendo EV positivo"
         })
 
-    # 🟡 Conservadora contextual
-    if model_prob > 0.65 and odds.get("home_moneyline", 0) < -250:
+    # 🟡 Conservador contextual (alineado al edge real)
+    if (
+        prop.get("type") == "total_goals" and
+        decision == "UNDER" and
+        edge > 0.05 and
+        odds.get("home_moneyline", 0) < -250
+    ):
         strategies.append({
             "profile": "CONSERVADORA",
-            "play": "Doble oportunidad favorito + Under 3.5",
+            "play": f"Doble oportunidad favorito + Under {line}",
             "logic": "Dominio esperado + baja producción de goles"
         })
 
