@@ -69,6 +69,41 @@ def normalize_prop(prop):
 
 
 # ==========================================================
+# 🧠 QUANT SUMMARY BUILDER (SOCCER)
+# ==========================================================
+
+def build_quant_summary(props):
+
+    summary = {}
+
+    for p in props:
+
+        if p.get("type") == "total_goals":
+            summary["totals"] = {
+                "line": p.get("line"),
+                "model_over": p.get("model_prob_over"),
+                "model_under": p.get("model_prob_under"),
+                "market_under": p.get("market_prob_under"),
+                "edge_under": p.get("edge_under")
+            }
+
+        if p.get("type") == "moneyline":
+            summary["moneyline"] = {
+                "model_home": p.get("model_prob_home"),
+                "model_draw": p.get("model_prob_draw"),
+                "model_away": p.get("model_prob_away")
+            }
+
+        if p.get("type") == "btts":
+            summary["btts"] = {
+                "model_yes": p.get("model_prob_yes"),
+                "model_no": p.get("model_prob_no")
+            }
+
+    return summary
+
+
+# ==========================================================
 # MAIN ENGINE
 # ==========================================================
 
@@ -160,7 +195,7 @@ async def ai_predict(req):
                 prop["under_odds"] = -110
 
         # ======================================================
-        # ⚽ SOCCER (POISSON REAL)
+        # ⚽ SOCCER
         # ======================================================
         elif sport == "soccer":
 
@@ -188,10 +223,8 @@ async def ai_predict(req):
                 matrix, total_line
             )
 
-
             player_props = [
 
-                # TOTAL GOALS
                 {
                     "name": "Match Total Goals",
                     "role": "team",
@@ -205,7 +238,6 @@ async def ai_predict(req):
                     "is_active": True
                 },
 
-                # MONEYLINE
                 {
                     "name": "Match Result",
                     "role": "team",
@@ -220,7 +252,6 @@ async def ai_predict(req):
                     "is_active": True
                 },
 
-                # BTTS
                 {
                     "name": "Both Teams To Score",
                     "role": "team",
@@ -235,7 +266,7 @@ async def ai_predict(req):
             ]
 
         # ======================================================
-        # 💰 TRADING ENGINE (ALL SPORTS)
+        # 💰 TRADING ENGINE
         # ======================================================
 
         enriched_props = []
@@ -260,22 +291,23 @@ async def ai_predict(req):
 
         tipster_decisions = tipster_decision_policy(enriched_props, odds)
 
-
         # ======================================================
         # 🧠 LLM
         # ======================================================
 
         if sport == "football":
-            final_prompt = nfl_prompt(
-                match, odds, tipster_decisions
-            )
+            final_prompt = nfl_prompt(match, odds, tipster_decisions)
+
         elif sport == "basketball":
-            final_prompt = nba_prompt(
-                match, odds, tipster_decisions
-            )
+            final_prompt = nba_prompt(match, odds, tipster_decisions)
+
         else:
+            quant_summary = build_quant_summary(enriched_props)
             final_prompt = soccer_prompt(
-                match, odds, tipster_decisions
+                match,
+                odds,
+                tipster_decisions,
+                quant_summary
             )
 
         analysis = run_llm(final_prompt)
