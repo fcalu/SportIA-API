@@ -73,12 +73,18 @@ def normalize_prop(prop):
 # ==========================================================
 
 def build_quant_summary(props):
-
+    
     summary = {}
 
     for p in props:
 
+        # =========================
+        # TOTALS
+        # =========================
         if p.get("type") == "total_goals":
+
+            projection = p.get("projection_model", {})
+
             summary["totals"] = {
                 "line": p.get("line"),
                 "model_over": p.get("model_prob_over"),
@@ -87,6 +93,15 @@ def build_quant_summary(props):
                 "edge_under": p.get("edge_under")
             }
 
+            summary["xg"] = {
+                "home_xg": projection.get("home_xg"),
+                "away_xg": projection.get("away_xg"),
+                "total_xg": projection.get("total_xg")
+            }
+
+        # =========================
+        # MONEYLINE
+        # =========================
         if p.get("type") == "moneyline":
             summary["moneyline"] = {
                 "model_home": p.get("model_prob_home"),
@@ -94,6 +109,9 @@ def build_quant_summary(props):
                 "model_away": p.get("model_prob_away")
             }
 
+        # =========================
+        # BTTS
+        # =========================
         if p.get("type") == "btts":
             summary["btts"] = {
                 "model_yes": p.get("model_prob_yes"),
@@ -101,7 +119,6 @@ def build_quant_summary(props):
             }
 
     return summary
-
 
 # ==========================================================
 # MAIN ENGINE
