@@ -16,7 +16,13 @@ async def get_team_stats(league, team_id):
         r = await client.get(url)
         data = r.json()
 
-    stats = data.get("team", {}).get("statistics", [])
+    stats = (
+    data.get("team", {})
+        .get("record", {})
+        .get("items", [{}])[0]
+        .get("stats", [])
+)
+
 
     stat_map = {}
 
