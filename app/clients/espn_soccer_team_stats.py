@@ -2,12 +2,6 @@ import httpx
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 
-def pick_first(stat_map, keys, default=0):
-    for k in keys:
-        if k in stat_map and stat_map[k] not in [None, ""]:
-            return stat_map[k]
-    return default
-
 
 async def get_team_stats(league, team_id):
     url = f"{BASE}/{league}/teams/{team_id}?enable=stats"
@@ -17,19 +11,17 @@ async def get_team_stats(league, team_id):
         data = r.json()
 
     stats = (
-    data.get("team", {})
-        .get("record", {})
-        .get("items", [{}])[0]
-        .get("stats", [])
-)
-
+        data.get("team", {})
+            .get("record", {})
+            .get("items", [{}])[0]
+            .get("stats", [])
+    )
 
     stat_map = {}
 
     for s in stats:
         name = s.get("name")
 
-        # 🔥 ESPN soccer normalmente usa displayValue
         value = (
             s.get("value")
             or s.get("displayValue")
@@ -42,12 +34,24 @@ async def get_team_stats(league, team_id):
             except:
                 continue
 
-    goals_for = stat_map.get("goalsFor", stat_map.get("goals", 1.3))
-    goals_against = stat_map.get("goalsAgainst", 1.3)
-    games_played = stat_map.get("gamesPlayed", 10)
+    # 🔥 FIX REAL AQUÍ
+    goals_for = (
+        stat_map.get("goalsFor")
+        or stat_map.get("pointsFor")
+        or stat_map.get("goals")
+        or 0
+    )
+
+    goals_against = (
+        stat_map.get("goalsAgainst")
+        or stat_map.get("pointsAgainst")
+        or 0
+    )
+
+    games_played = stat_map.get("gamesPlayed") or 0
 
     if games_played <= 0:
-        games_played = 10
+        games_played = 1  # evitar división por cero
 
     return {
         "goals_for": goals_for,
