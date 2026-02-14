@@ -2,50 +2,49 @@ import httpx
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 
-def pick_first(stat_map, keys, default=0):
-    for k in keys:
-        if k in stat_map and stat_map[k] not in [None, ""]:
-            return stat_map[k]
-    return default
+def safe_float(v, default=0):
+    try:
+        return float(v)
+    except:
+        return default
 
 
 async def get_team_stats(league, team_id):
-    url = f"{BASE}/{league}/teams/{team_id}?enable=stats"
+    url = f"{BASE}/{league}/teams/{team_id}"
 
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
         data = r.json()
 
-    stats = data.get("team", {}).get("statistics", [])
+    team = data.get("team", {})
 
-    stat_map = {}
+    goals_for = 0
+    goals_against = 0
+    games_played = 1
 
-    for s in stats:
-        name = s.get("name")
-        value = s.get("value")
+    # ✅ Primero intenta statistics
+    statistics = team.get("statistics")
 
-        if name and value is not None:
-            stat_map[name] = value
+    if statistics:
+        stat_map = {s.get("name"): s.get("value") for s in statistics}
 
-    goals_for = float(pick_first(stat_map, [
-        "goalsFor",
-        "goals",
-        "pointsFor",
-        "scored"
-    ], 0))
+        goals_for = safe_float(stat_map.get("goalsFor") or stat_map.get("goals"))
+        goals_against = safe_float(stat_map.get("goalsAgainst"))
+        games_played = safe_float(stat_map.get("gamesPlayed") or stat_map.get("games"))
 
-    goals_against = float(pick_first(stat_map, [
-        "goalsAgainst",
-        "pointsAgainst",
-        "conceded"
-    ], 0))
+    # ✅ Si no existe statistics, usa record
+    if not goals_for:
+        record = team.get("record", {}).get("items", [])
 
-    games_played = float(pick_first(stat_map, [
-        "gamesPlayed",
-        "games",
-        "matches",
-        "played"
-    ], 1))
+        for item in record:
+            if item.get("description") == "Overall":
+                stats = item.get("stats", [])
+                stat_map = {s.get("name"): s.get("value") for s in stats}
+
+                goals_for = safe_float(stat_map.get("pointsFor"))
+                goals_against = safe_float(stat_map.get("pointsAgainst"))
+                games_played = safe_float(stat_map.get("gamesPlayed"))
+                break
 
     if games_played <= 0:
         games_played = 1
