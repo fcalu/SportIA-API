@@ -38,6 +38,8 @@ from app.services.decision_policy_engine import tipster_decision_policy
 from app.prompts.wspm_nfl import build_prompt as nfl_prompt
 from app.prompts.wspm_nba import build_prompt as nba_prompt
 from app.prompts.wspm_soccer import build_prompt as soccer_prompt
+from app.services.soccer_history_engine import calculate_team_history
+from app.services.db_saver import save_prediction
 
 
 # ==========================================================
@@ -146,75 +148,14 @@ async def ai_predict(req):
         player_props = []
 
         # ======================================================
-        # 🏈 NFL
-        # ======================================================
-        if sport == "football":
-
-            player_props = generate_ai_props(
-                match, sport, league, odds, script
-            )
-
-            sportsbook_props = await get_sportsbook_player_props(
-                sport=sport,
-                league=league,
-                event_id=event_id
-            )
-
-            for p in player_props:
-                p = normalize_prop(p)
-                name_lower = p["name"].lower()
-
-                for book in sportsbook_props:
-                    if name_lower in book.get("name", "").lower():
-                        p["line"] = safe_float(book.get("line"))
-                        p["over_odds"] = book.get("over_odds", -110)
-                        p["under_odds"] = book.get("under_odds", -110)
-                        break
-
-                p["projection_model"] = wspm_nfl_projection(p, odds, script)
-
-        # ======================================================
-        # 🏀 NBA
-        # ======================================================
-        elif sport == "basketball":
-
-            home_id, away_id = await get_event_teams(
-                sport, league, event_id
-            )
-
-            from app.clients.espn_nba_roster import get_team_roster
-
-            players = (
-                await get_team_roster(home_id)
-                + await get_team_roster(away_id)
-            )
-
-            statuses = await get_event_player_status(
-                sport, league, event_id
-            )
-
-            player_props = build_nba_props_from_roster(
-                players, statuses, odds
-            )
-
-            for prop in player_props:
-                prop = normalize_prop(prop)
-
-                projection = wspm_nba_projection(
-                    prop, odds, script
-                )
-
-                prop["projection_model"] = projection
-                prop["line"] = round(
-                    projection.get("mean", 0) * 0.97, 1
-                )
-                prop["over_odds"] = -110
-                prop["under_odds"] = -110
-
-        # ======================================================
         # ⚽ SOCCER
         # ======================================================
-        elif sport == "soccer":
+        # ======================================================
+# ⚽ SOCCER
+# ======================================================
+        if sport == "soccer":
+
+            from app.services.soccer_support_engine import calculate_over_support
 
             home_id, away_id = await get_event_teams(
                 sport, league, event_id
@@ -222,17 +163,35 @@ async def ai_predict(req):
 
             home_stats = await get_team_stats(league, home_id)
             away_stats = await get_team_stats(league, away_id)
-            
-            # 🔥 AGREGA ESTO AQUÍ
+
             debug("HOME_STATS", home_stats)
             debug("AWAY_STATS", away_stats)
 
-            xg = expected_goals_match(
-                home_stats, away_stats, league
-            )
-
+            # 🔹 1️⃣ DEFINIR TOTAL LINE PRIMERO
             total_line = safe_float(
                 odds.get("over_under"), 2.5
+            )
+
+            # 🔹 2️⃣ HISTORIAL (usa total_line)
+            home_history = await calculate_team_history(
+                league, home_id, total_line
+            )
+
+            away_history = await calculate_team_history(
+                league, away_id, total_line
+            )
+
+            debug("HOME_HISTORY", home_history)
+            debug("AWAY_HISTORY", away_history)
+
+            historical_support = (
+                home_history["over_rate_line"] +
+                away_history["over_rate_line"]
+            ) / 2
+
+            # 🔹 3️⃣ MODELO xG
+            xg = expected_goals_match(
+                home_stats, away_stats, league
             )
 
             matrix = build_score_matrix(
@@ -242,6 +201,13 @@ async def ai_predict(req):
 
             markets = derive_markets(
                 matrix, total_line
+            )
+
+            # 🔹 4️⃣ SOPORTE COMBINADO (modelo + historia)
+            over_support = calculate_over_support(
+                markets["over"],
+                home_history,
+                away_history
             )
 
             player_props = [
@@ -254,6 +220,10 @@ async def ai_predict(req):
                     "projection_model": xg,
                     "model_prob_over": markets["over"],
                     "model_prob_under": markets["under"],
+                    "historical_support": round(historical_support, 4),
+                    "hybrid_support": round(over_support, 4),
+                    "home_history": home_history,
+                    "away_history": away_history,
                     "over_odds": odds.get("over_odds"),
                     "under_odds": odds.get("under_odds"),
                     "is_active": True
@@ -286,6 +256,7 @@ async def ai_predict(req):
                 }
             ]
 
+
         # ======================================================
         # 💰 TRADING ENGINE
         # ======================================================
@@ -293,6 +264,7 @@ async def ai_predict(req):
         enriched_props = []
 
         for prop in player_props:
+
             prop = normalize_prop(prop)
 
             prop.update(
@@ -316,24 +288,18 @@ async def ai_predict(req):
         # 🧠 LLM
         # ======================================================
 
-        if sport == "football":
-            final_prompt = nfl_prompt(match, odds, tipster_decisions)
+        quant_summary = build_quant_summary(enriched_props)
 
-        elif sport == "basketball":
-            final_prompt = nba_prompt(match, odds, tipster_decisions)
-
-        else:
-            quant_summary = build_quant_summary(enriched_props)
-            final_prompt = soccer_prompt(
-                match,
-                odds,
-                tipster_decisions,
-                quant_summary
-            )
+        final_prompt = soccer_prompt(
+            match,
+            odds,
+            tipster_decisions,
+            quant_summary
+        )
 
         analysis = run_llm(final_prompt)
 
-        return {
+        response = {
             "match": match,
             "league": f"{sport}/{league}",
             "odds": odds,
@@ -342,6 +308,10 @@ async def ai_predict(req):
             "tipster_decisions": tipster_decisions,
             "analysis": analysis
         }
+
+        save_prediction(req.dict(), response)
+
+        return response
 
     except Exception as e:
         print("\n💥 FULL TRACEBACK 💥")

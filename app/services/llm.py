@@ -1,22 +1,16 @@
 from openai import OpenAI
 from app.core.config import settings
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
 
 def run_llm(user_prompt: str, system_prompt: str = None):
-    """
-    Ejecuta el modelo LLM con soporte profesional:
-    - system_prompt opcional (controla estilo y reglas)
-    - user_prompt dinámico del partido
-    """
 
     if not settings.OPENAI_API_KEY:
         return "LLM deshabilitado (sin API key)"
 
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
     messages = []
 
-    # Si no mandan system_prompt, usamos uno por defecto
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     else:
