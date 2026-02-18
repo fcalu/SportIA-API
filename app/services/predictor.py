@@ -6,6 +6,8 @@ from app.clients.espn_sportsbook_props import get_sportsbook_player_props
 from app.clients.espn_event import get_event_teams, get_event_player_status
 from app.clients.espn_soccer_team_stats import get_team_stats
 from app.clients.espn_nba_roster import get_team_roster
+from app.clients.espn_player_gamelog import get_player_game_log
+from app.services.player_form_engine import analyze_player_form
 
 from app.services.llm import run_llm
 from app.services.nba_prop_builder import build_nba_props_from_roster
@@ -117,9 +119,7 @@ async def ai_predict(req):
 
                 name_lower = prop["name"].lower()
 
-                # 🔎 flexible match
                 for book in sportsbook_props:
-
                     book_name = book.get("name", "").lower()
 
                     if (
@@ -131,7 +131,6 @@ async def ai_predict(req):
                         prop["under_odds"] = book.get("under_odds", -110)
                         break
 
-                # 🧠 Projection
                 prop["projection_model"] = wspm_nfl_projection(
                     prop, odds, script
                 )
@@ -171,19 +170,58 @@ async def ai_predict(req):
                 prop["projection_model"] = projection
 
                 mean = projection.get("mean", 0)
+                minutes_proj = projection.get("projected_minutes", 0)
 
-                # 🎯 realistic shading
+                # 🎯 shading + stat key mapping
                 if prop["type"] == "Points":
                     prop["line"] = round(mean * 0.98)
+                    stat_key = "points"
                 elif prop["type"] == "Rebounds":
                     prop["line"] = round(mean * 0.95)
+                    stat_key = "rebounds"
                 elif prop["type"] == "Assists":
                     prop["line"] = round(mean * 0.93)
+                    stat_key = "assists"
                 else:
                     prop["line"] = round(mean * 0.97)
+                    stat_key = None
 
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
+
+                # ==================================================
+                # 🔥 HISTORICAL ANALYSIS (NO ROMPE NADA)
+                # ==================================================
+                if stat_key:
+
+                    try:
+
+                        game_log = await get_player_game_log(
+                            prop["player_id"],
+                            last_n=10
+                        )
+
+                        form_analysis = analyze_player_form(
+                            game_log,
+                            stat_key,
+                            prop["line"],
+                            minutes_proj
+                        )
+
+                        prop["recent_form"] = form_analysis
+
+                        # 📊 Modelo vs reciente
+                        if form_analysis.get("avg_last_n"):
+
+                            delta = round(
+                                form_analysis["avg_last_n"] - mean,
+                                2
+                            )
+
+                            prop["model_vs_recent_delta"] = delta
+
+                    except Exception as e:
+                        print("⚠️ L10 fetch error:", e)
 
         # ======================================================
         # ⚽ SOCCER
@@ -250,14 +288,12 @@ async def ai_predict(req):
         # ======================================================
         # 🛡 PROTECTION
         # ======================================================
-
         if not player_props:
             print("⚠️ NO PLAYER PROPS GENERATED")
 
         # ======================================================
         # 💰 TRADING ENGINE
         # ======================================================
-
         enriched_props = []
 
         for prop in player_props:
@@ -278,7 +314,6 @@ async def ai_predict(req):
         # ======================================================
         # 🎯 DECISION POLICY
         # ======================================================
-
         tipster_decisions = tipster_decision_policy(
             enriched_props, odds
         )
@@ -286,17 +321,10 @@ async def ai_predict(req):
         # ======================================================
         # 🧠 LLM
         # ======================================================
-
         if sport == "football":
-            final_prompt = nfl_prompt(
-                match, odds, tipster_decisions
-            )
-
+            final_prompt = nfl_prompt(match, odds, tipster_decisions)
         elif sport == "basketball":
-            final_prompt = nba_prompt(
-                match, odds, tipster_decisions
-            )
-
+            final_prompt = nba_prompt(match, odds, tipster_decisions)
         else:
             final_prompt = soccer_prompt(
                 match, odds, tipster_decisions, {}
