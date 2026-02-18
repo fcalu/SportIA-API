@@ -1,7 +1,7 @@
 import httpx
 
 
-BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/athletes"
+BASE_URL = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
 
 
 async def get_player_game_log(player_id, last_n=10):
@@ -20,32 +20,35 @@ async def get_player_game_log(player_id, last_n=10):
     except Exception:
         return []
 
-    events = data.get("events", [])
-
     games = []
 
-    for event in events[:last_n]:
+    season_types = data.get("seasonTypes", [])
 
-        try:
-            stats = event.get("statistics", [])
+    if not season_types:
+        return []
 
-            stat_map = {}
+    categories = season_types[0].get("categories", [])
 
-            for s in stats:
-                name = s.get("name")
-                value = s.get("displayValue")
+    for category in categories:
+        events = category.get("events", [])
 
-                if name and value:
-                    stat_map[name] = value
+        for event in events:
+            stats = event.get("stats", [])
 
-            games.append({
-                "points": float(stat_map.get("points", 0)),
-                "rebounds": float(stat_map.get("rebounds", 0)),
-                "assists": float(stat_map.get("assists", 0)),
-                "minutes": float(stat_map.get("minutes", 0))
-            })
+            if len(stats) < 14:
+                continue
 
-        except:
-            continue
+            try:
+                games.append({
+                    "minutes": float(stats[0]),
+                    "rebounds": float(stats[7]),
+                    "assists": float(stats[8]),
+                    "points": float(stats[13])
+                })
+            except:
+                continue
+
+            if len(games) >= last_n:
+                return games
 
     return games
