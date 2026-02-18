@@ -123,7 +123,6 @@ async def ai_predict(req):
 
                 normalize_prop(prop)
 
-                # 🖼 IMAGES
                 if prop.get("player_id"):
                     prop["player_image"] = (
                         f"https://a.espncdn.com/i/headshots/nfl/players/full/{prop['player_id']}.png"
@@ -164,48 +163,56 @@ async def ai_predict(req):
 
             debug("NBA_STATUSES", statuses)
 
-            player_props = build_nba_props_from_roster(
+            raw_props = build_nba_props_from_roster(
                 players, statuses, odds
             )
 
-            for prop in player_props:
+            filtered_props = []
+
+            for prop in raw_props:
 
                 normalize_prop(prop)
 
-                # 🖼 IMAGES
                 if prop.get("player_id"):
                     prop["player_image"] = (
                         f"https://a.espncdn.com/i/headshots/nba/players/full/{prop['player_id']}.png"
                     )
 
+                status = statuses.get(
+                    prop.get("player_id"), {}
+                ).get("status", "active")
+
+                prop["injury_status"] = status
+
+                # ❌ Excluir OUT / DOUBTFUL
+                if status in ["out", "doubtful"]:
+                    continue
+
+                # ⚠ Penalizar QUESTIONABLE
+                if status == "questionable":
+                    prop["reliability_factor"] = 0.4
+                else:
+                    prop["reliability_factor"] = 0.6
+
                 projection = wspm_nba_projection(
                     prop, odds, script
                 )
 
-                status = statuses.get(prop["player_id"], {}).get("status", "active")
-
-                prop["injury_status"] = status
-
-                # ❌ excluir lesionados
-                if status in ["out", "doubtful"]:
-                    continue
-
-                # ⚠️ penalizar questionable
-                if status == "questionable":
-                    prop["reliability_factor"] = 0.4
-
-                # 🎯 filtro de minutos
                 minutes_proj = projection.get("projected_minutes", 0)
 
+                # ❌ Excluir < 20 minutos
                 if minutes_proj < 20:
                     continue
 
-
                 prop["projection_model"] = projection
+                prop["projected_minutes"] = minutes_proj
 
                 mean = projection.get("mean", 0)
-                minutes_proj = projection.get("projected_minutes", 0)
 
+                if mean <= 0:
+                    continue
+
+                # Línea derivada del modelo
                 if prop["type"] == "Points":
                     prop["line"] = round(mean * 0.98)
                     stat_key = "points"
@@ -222,11 +229,9 @@ async def ai_predict(req):
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
 
-                # 🔥 HISTORICAL ANALYSIS
+                # 🔥 Histórico L10
                 if stat_key:
-
                     try:
-
                         game_log = await get_player_game_log(
                             prop["player_id"],
                             last_n=10
@@ -241,17 +246,19 @@ async def ai_predict(req):
 
                         prop["recent_form"] = form_analysis
 
-                        if form_analysis.get("avg_last_n"):
-
+                        if form_analysis.get("avg_last_n") is not None:
                             delta = round(
                                 form_analysis["avg_last_n"] - mean,
                                 2
                             )
-
                             prop["model_vs_recent_delta"] = delta
 
                     except Exception as e:
                         print("⚠️ L10 fetch error:", e)
+
+                filtered_props.append(prop)
+
+            player_props = filtered_props
 
         # ======================================================
         # ⚽ SOCCER
@@ -344,7 +351,9 @@ async def ai_predict(req):
 
         analysis = run_llm(final_prompt)
 
+        # ======================================================
         # 🏟 TEAM LOGOS
+        # ======================================================
         home_logo = None
         away_logo = None
 

@@ -1,0 +1,176 @@
+import math
+
+
+# ==========================================================
+# UTILIDADES
+# ==========================================================
+
+def normal_cdf(x, mean, std):
+    """CDF de distribución normal"""
+    z = (x - mean) / std
+    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+
+def american_to_implied_prob(odds):
+    """Convierte momios americanos a probabilidad implícita"""
+    if odds is None:
+        return None
+
+    if odds > 0:
+        return 100 / (odds + 100)
+    else:
+        return abs(odds) / (abs(odds) + 100)
+
+
+# ==========================================================
+# VALIDACIONES
+# ==========================================================
+
+def is_valid_prop(prop):
+    return (
+        prop.get("injury_status") == "active"
+        and prop.get("projected_minutes", 0) >= 20
+        and prop.get("line") is not None
+        and prop.get("over_odds") is not None
+        and prop.get("under_odds") is not None
+        and prop.get("projection_model") is not None
+    )
+
+
+# ==========================================================
+# BAYESIAN BLENDING
+# ==========================================================
+
+def blend_mean_with_recent(model_mean, recent_form, weight_recent=0.35):
+    """
+    Mezcla modelo + promedio reciente
+    """
+    if not recent_form:
+        return model_mean
+
+    recent_avg = recent_form.get("avg_last_n")
+    if recent_avg is None:
+        return model_mean
+
+    return (
+        model_mean * (1 - weight_recent)
+        + recent_avg * weight_recent
+    )
+
+
+# ==========================================================
+# MINUTES ADJUSTMENT
+# ==========================================================
+
+def adjust_for_minutes(mean, projected_minutes, recent_form):
+    """
+    Ajuste si hay gran delta de minutos vs reciente
+    """
+    if not recent_form:
+        return mean
+
+    delta = recent_form.get("minutes_projection_delta", 0)
+
+    # Si proyecta más minutos → boost leve
+    if delta > 3:
+        return mean * 1.05
+
+    # Si proyecta menos minutos → penalización leve
+    if delta < -3:
+        return mean * 0.95
+
+    return mean
+
+
+# ==========================================================
+# CORE ENGINE
+# ==========================================================
+
+def evaluate_nba_prop(prop):
+
+    if not is_valid_prop(prop):
+        prop["model_prob_over"] = None
+        prop["model_prob_under"] = None
+        prop["edge_over"] = 0
+        prop["edge_under"] = 0
+        prop["bet_decision"] = "PASS"
+        prop["bet_tier"] = "NO BET"
+        return prop
+
+    mean = prop["projection_model"].get("mean")
+    std = prop["projection_model"].get("std_dev", 1.0)
+    std = max(std, 1.0)
+
+    line = prop["line"]
+
+    # 🔥 Bayesian blend
+    mean = blend_mean_with_recent(mean, prop.get("recent_form"))
+
+    # 🔥 Ajuste minutos
+    mean = adjust_for_minutes(
+        mean,
+        prop.get("projected_minutes"),
+        prop.get("recent_form")
+    )
+
+    # ======================================================
+    # PROBABILIDAD MODELO
+    # ======================================================
+
+    prob_under = normal_cdf(line, mean, std)
+    prob_over = 1 - prob_under
+
+    prop["model_prob_over"] = round(prob_over, 4)
+    prop["model_prob_under"] = round(prob_under, 4)
+
+    # ======================================================
+    # MERCADO
+    # ======================================================
+
+    market_over = american_to_implied_prob(prop["over_odds"])
+    market_under = american_to_implied_prob(prop["under_odds"])
+
+    prop["market_prob_over"] = round(market_over, 4)
+    prop["market_prob_under"] = round(market_under, 4)
+
+    # ======================================================
+    # EDGE
+    # ======================================================
+
+    edge_over = prob_over - market_over
+    edge_under = prob_under - market_under
+
+    prop["edge_over"] = round(edge_over, 4)
+    prop["edge_under"] = round(edge_under, 4)
+
+    # ======================================================
+    # DECISIÓN
+    # ======================================================
+
+    threshold = 0.035  # 3.5% edge mínimo
+
+    if edge_over > threshold:
+        prop["bet_decision"] = "OVER"
+        prop["bet_tier"] = "VALUE BET"
+        prop["max_edge"] = round(edge_over, 4)
+
+    elif edge_under > threshold:
+        prop["bet_decision"] = "UNDER"
+        prop["bet_tier"] = "VALUE BET"
+        prop["max_edge"] = round(edge_under, 4)
+
+    else:
+        prop["bet_decision"] = "PASS"
+        prop["bet_tier"] = "NO BET"
+
+    # ======================================================
+    # CONFIDENCE DINÁMICA
+    # ======================================================
+
+    reliability = prop.get("reliability_factor", 0.6)
+    confidence = abs(max(edge_over, edge_under)) * 100
+    confidence *= reliability
+
+    prop["confidence"] = round(min(confidence, 95), 1)
+
+    return prop
