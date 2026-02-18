@@ -182,6 +182,25 @@ async def ai_predict(req):
                     prop, odds, script
                 )
 
+                status = statuses.get(prop["player_id"], {}).get("status", "active")
+
+                prop["injury_status"] = status
+
+                # ❌ excluir lesionados
+                if status in ["out", "doubtful"]:
+                    continue
+
+                # ⚠️ penalizar questionable
+                if status == "questionable":
+                    prop["reliability_factor"] = 0.4
+
+                # 🎯 filtro de minutos
+                minutes_proj = projection.get("projected_minutes", 0)
+
+                if minutes_proj < 20:
+                    continue
+
+
                 prop["projection_model"] = projection
 
                 mean = projection.get("mean", 0)
