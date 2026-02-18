@@ -1,4 +1,4 @@
-import aiohttp
+import httpx
 
 
 BASE_URL = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
@@ -8,27 +8,42 @@ async def get_player_game_log(player_id, last_n=10):
 
     url = f"{BASE_URL}/{player_id}/gamelog"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url)
 
-            if resp.status != 200:
-                return []
+        if response.status_code != 200:
+            return []
 
-            data = await resp.json()
+        data = response.json()
 
-    events = data.get("events", [])
+    except Exception:
+        return []
+
+    names = data.get("names", [])
+    events = data.get("events", {})
 
     games = []
 
-    for event in events[:last_n]:
+    # los events vienen como dict, no lista
+    for event_id, event_data in list(events.items())[:last_n]:
 
-        stats = event.get("statistics", {})
+        try:
+            stats_values = event_data.get("stats", [])
 
-        games.append({
-            "points": stats.get("points"),
-            "rebounds": stats.get("rebounds"),
-            "assists": stats.get("assists"),
-            "minutes": stats.get("minutes")
-        })
+            if not stats_values or len(stats_values) != len(names):
+                continue
+
+            stats_dict = dict(zip(names, stats_values))
+
+            games.append({
+                "points": float(stats_dict.get("points", 0)),
+                "rebounds": float(stats_dict.get("totalRebounds", 0)),
+                "assists": float(stats_dict.get("assists", 0)),
+                "minutes": float(stats_dict.get("minutes", 0))
+            })
+
+        except Exception:
+            continue
 
     return games
