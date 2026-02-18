@@ -1,7 +1,7 @@
 import httpx
 
 
-BASE_URL = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes"
+BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/athletes"
 
 
 async def get_player_game_log(player_id, last_n=10):
@@ -20,30 +20,32 @@ async def get_player_game_log(player_id, last_n=10):
     except Exception:
         return []
 
-    names = data.get("names", [])
-    events = data.get("events", {})
+    events = data.get("events", [])
 
     games = []
 
-    # los events vienen como dict, no lista
-    for event_id, event_data in list(events.items())[:last_n]:
+    for event in events[:last_n]:
 
         try:
-            stats_values = event_data.get("stats", [])
+            stats = event.get("statistics", [])
 
-            if not stats_values or len(stats_values) != len(names):
-                continue
+            stat_map = {}
 
-            stats_dict = dict(zip(names, stats_values))
+            for s in stats:
+                name = s.get("name")
+                value = s.get("displayValue")
+
+                if name and value:
+                    stat_map[name] = value
 
             games.append({
-                "points": float(stats_dict.get("points", 0)),
-                "rebounds": float(stats_dict.get("totalRebounds", 0)),
-                "assists": float(stats_dict.get("assists", 0)),
-                "minutes": float(stats_dict.get("minutes", 0))
+                "points": float(stat_map.get("points", 0)),
+                "rebounds": float(stat_map.get("rebounds", 0)),
+                "assists": float(stat_map.get("assists", 0)),
+                "minutes": float(stat_map.get("minutes", 0))
             })
 
-        except Exception:
+        except:
             continue
 
     return games

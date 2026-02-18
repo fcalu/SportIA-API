@@ -97,11 +97,17 @@ async def ai_predict(req):
         debug("ODDS", odds)
 
         player_props = []
+        home_id = None
+        away_id = None
 
         # ======================================================
         # 🏈 NFL
         # ======================================================
         if sport == "football":
+
+            home_id, away_id = await get_event_teams(
+                sport, league, event_id
+            )
 
             player_props = generate_ai_props(
                 match, sport, league, odds, script
@@ -117,15 +123,18 @@ async def ai_predict(req):
 
                 normalize_prop(prop)
 
+                # 🖼 IMAGES
+                if prop.get("player_id"):
+                    prop["player_image"] = (
+                        f"https://a.espncdn.com/i/headshots/nfl/players/full/{prop['player_id']}.png"
+                    )
+
                 name_lower = prop["name"].lower()
 
                 for book in sportsbook_props:
                     book_name = book.get("name", "").lower()
 
-                    if (
-                        name_lower in book_name
-                        or book_name in name_lower
-                    ):
+                    if name_lower in book_name or book_name in name_lower:
                         prop["line"] = safe_float(book.get("line"))
                         prop["over_odds"] = book.get("over_odds", -110)
                         prop["under_odds"] = book.get("under_odds", -110)
@@ -163,6 +172,12 @@ async def ai_predict(req):
 
                 normalize_prop(prop)
 
+                # 🖼 IMAGES
+                if prop.get("player_id"):
+                    prop["player_image"] = (
+                        f"https://a.espncdn.com/i/headshots/nba/players/full/{prop['player_id']}.png"
+                    )
+
                 projection = wspm_nba_projection(
                     prop, odds, script
                 )
@@ -172,7 +187,6 @@ async def ai_predict(req):
                 mean = projection.get("mean", 0)
                 minutes_proj = projection.get("projected_minutes", 0)
 
-                # 🎯 shading + stat key mapping
                 if prop["type"] == "Points":
                     prop["line"] = round(mean * 0.98)
                     stat_key = "points"
@@ -189,9 +203,7 @@ async def ai_predict(req):
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
 
-                # ==================================================
-                # 🔥 HISTORICAL ANALYSIS (NO ROMPE NADA)
-                # ==================================================
+                # 🔥 HISTORICAL ANALYSIS
                 if stat_key:
 
                     try:
@@ -210,7 +222,6 @@ async def ai_predict(req):
 
                         prop["recent_form"] = form_analysis
 
-                        # 📊 Modelo vs reciente
                         if form_analysis.get("avg_last_n"):
 
                             delta = round(
@@ -253,7 +264,6 @@ async def ai_predict(req):
             )
 
             player_props = [
-
                 {
                     "name": "Match Total Goals",
                     "role": "team",
@@ -265,29 +275,12 @@ async def ai_predict(req):
                     "over_odds": odds.get("over_odds"),
                     "under_odds": odds.get("under_odds"),
                     "is_active": True
-                },
-
-                {
-                    "name": "Match Result",
-                    "role": "team",
-                    "type": "moneyline",
-                    "projection_model": xg,
-                    "model_prob_home": markets["home_win"],
-                    "model_prob_draw": markets["draw"],
-                    "model_prob_away": markets["away_win"],
-                    "home_odds": odds.get("home_moneyline"),
-                    "draw_odds": odds.get("draw_odds"),
-                    "away_odds": odds.get("away_moneyline"),
-                    "is_active": True
                 }
             ]
 
         else:
             return {"ERROR": "Unsupported sport"}
 
-        # ======================================================
-        # 🛡 PROTECTION
-        # ======================================================
         if not player_props:
             print("⚠️ NO PLAYER PROPS GENERATED")
 
@@ -332,11 +325,25 @@ async def ai_predict(req):
 
         analysis = run_llm(final_prompt)
 
+        # 🏟 TEAM LOGOS
+        home_logo = None
+        away_logo = None
+
+        if sport == "basketball":
+            home_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{home_id}.png"
+            away_logo = f"https://a.espncdn.com/i/teamlogos/nba/500/{away_id}.png"
+
+        elif sport == "football":
+            home_logo = f"https://a.espncdn.com/i/teamlogos/nfl/500/{home_id}.png"
+            away_logo = f"https://a.espncdn.com/i/teamlogos/nfl/500/{away_id}.png"
+
         return {
             "match": match,
             "league": raw_league,
             "odds": odds,
             "game_script": script,
+            "home_logo": home_logo,
+            "away_logo": away_logo,
             "player_props": enriched_props,
             "tipster_decisions": tipster_decisions,
             "analysis": analysis
