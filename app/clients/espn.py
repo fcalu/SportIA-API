@@ -33,10 +33,20 @@ def _nba_date_range():
     end = today + timedelta(days=7)
     return f"{today.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
 
+def _soccer_date_range():
+    today = datetime.utcnow().date()
+    end = today + timedelta(days=14)
+    return f"{today.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+
 async def get_scoreboard(path: str, sport: str):
     url = f"{BASE}/{path}/scoreboard"
+
     if sport == "nba":
         url += f"?dates={_nba_date_range()}"
+
+    if sport == "soccer":
+        url += f"?dates={_soccer_date_range()}"
+
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(url)
         r.raise_for_status()
