@@ -8,6 +8,7 @@ from app.clients.espn_soccer_team_stats import get_team_stats
 from app.clients.espn_nba_roster import get_team_roster
 from app.clients.espn_player_gamelog import get_player_game_log
 from app.services.player_form_engine import analyze_player_form
+from app.services.wspm_engine import implied_probability
 
 from app.services.llm import run_llm
 from app.services.nba_prop_builder import build_nba_props_from_roster
@@ -289,21 +290,92 @@ async def ai_predict(req):
                 matrix, total_line
             )
 
-            player_props = [
-                {
-                    "name": "Match Total Goals",
-                    "role": "team",
-                    "type": "total_goals",
-                    "line": total_line,
-                    "projection_model": xg,
-                    "model_prob_over": markets["over"],
-                    "model_prob_under": markets["under"],
-                    "over_odds": odds.get("over_odds"),
-                    "under_odds": odds.get("under_odds"),
-                    "is_active": True
-                }
-            ]
+            # ======================================================
+# ⚽ BUILD SOCCER MARKETS
+# ======================================================
 
+            player_props = []
+
+            # ---------- TOTAL GOALS ----------
+            raw_over = implied_probability(odds.get("over_odds"))
+            raw_under = implied_probability(odds.get("under_odds"))
+
+            hold = 0
+            fair_over = None
+            fair_under = None
+
+            if raw_over and raw_under:
+                hold = raw_over + raw_under - 1
+                if hold > -1:
+                    fair_over = raw_over / (1 + hold)
+                    fair_under = raw_under / (1 + hold)
+
+            total_prop = {
+                "name": "Match Total Goals",
+                "role": "team",
+                "type": "total_goals",
+                "line": total_line,
+                "projection_model": xg,
+                "model_prob_over": markets["over"],
+                "model_prob_under": markets["under"],
+                "over_odds": odds.get("over_odds"),
+                "under_odds": odds.get("under_odds"),
+                "is_active": True
+            }
+
+            # 🔥 Pricing signals
+            if fair_over:
+                total_prop["pricing_signals"] = {
+                    "raw_implied_over": round(raw_over, 4),
+                    "raw_implied_under": round(raw_under, 4),
+                    "book_hold": round(hold, 4),
+                    "fair_prob_over": round(fair_over, 4),
+                    "fair_prob_under": round(fair_under, 4),
+                    "model_vs_fair_delta": round(markets["over"] - fair_over, 4)
+                }
+
+            player_props.append(total_prop)
+
+
+            # ---------- BOTH TEAMS TO SCORE ----------
+            btts_prop = {
+                "name": "Both Teams To Score",
+                "role": "team",
+                "type": "btts",
+                "line": None,
+                "projection_model": xg,
+                "model_prob_yes": markets["btts_yes"],
+                "model_prob_no": markets["btts_no"],
+                "is_active": True
+            }
+
+            player_props.append(btts_prop)
+
+
+            # ---------- FULL TIME RESULT ----------
+            player_props.append({
+                "name": "Full Time Result - Home",
+                "role": "team",
+                "type": "moneyline_home",
+                "model_prob": markets["home_win"],
+                "is_active": True
+            })
+
+            player_props.append({
+                "name": "Full Time Result - Draw",
+                "role": "team",
+                "type": "moneyline_draw",
+                "model_prob": markets["draw"],
+                "is_active": True
+            })
+
+            player_props.append({
+                "name": "Full Time Result - Away",
+                "role": "team",
+                "type": "moneyline_away",
+                "model_prob": markets["away_win"],
+                "is_active": True
+            })
         else:
             return {"ERROR": "Unsupported sport"}
 
