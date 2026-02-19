@@ -366,16 +366,47 @@ async def ai_predict(req):
             away_logo = f"https://a.espncdn.com/i/teamlogos/nfl/500/{away_id}.png"
 
         return {
-            "match": match,
-            "league": raw_league,
-            "odds": odds,
-            "game_script": script,
-            "home_logo": home_logo,
-            "away_logo": away_logo,
-            "player_props": enriched_props,
-            "tipster_decisions": tipster_decisions,
-            "analysis": analysis
+    # 🔒 OUTPUT ACTUAL (NO TOCAR)
+    "match": match,
+    "league": raw_league,
+    "odds": odds,
+    "game_script": script,
+    "home_logo": home_logo,
+    "away_logo": away_logo,
+    "player_props": enriched_props,
+    "tipster_decisions": tipster_decisions,
+    "analysis": analysis,
+
+    # 🆕 NUEVO BLOQUE META
+    "meta": {
+        "schema_version": "2.0",
+        "model_engine": "WSPM",
+        "generated_from_event_id": event_id,
+    },
+
+    # 🆕 EVENT INFO (YA TIENES LOS DATOS)
+    "event": {
+        "event_id": event_id,
+        "sport": sport,
+        "league_code": league,
+        "raw_league": raw_league
+    },
+
+    # 🆕 TEAMS STRUCTURE
+    "teams": {
+        "home": {
+            "id": home_id,
+            "name": req.home_team,
+            "logo": home_logo
+        },
+        "away": {
+            "id": away_id,
+            "name": req.away_team,
+            "logo": away_logo
         }
+    }
+}
+
 
     except Exception as e:
         print("\n💥 FULL TRACEBACK 💥")

@@ -1,3 +1,5 @@
+from app.services.wspm_engine import implied_probability
+
 def calculate_edge(prop=None, odds=None, script=None, sport=None, league=None):
     
     # ======================================================
@@ -17,10 +19,11 @@ def calculate_edge(prop=None, odds=None, script=None, sport=None, league=None):
             return prop
 
         # Convert American odds to decimal (simplified)
-        decimal_odds = 2.0
+        over_odds = prop.get("over_odds")
+        if over_odds:
+            implied = implied_probability(over_odds)
+            edge = prop["model_prob_over"] - implied
 
-        implied_prob = 1 / decimal_odds
-        edge = prob - implied_prob
 
         prop["edge"] = round(edge, 3)
 
