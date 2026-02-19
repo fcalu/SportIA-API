@@ -9,6 +9,11 @@ from app.clients.espn_nba_roster import get_team_roster
 from app.clients.espn_player_gamelog import get_player_game_log
 from app.services.player_form_engine import analyze_player_form
 from app.services.wspm_engine import implied_probability
+from datetime import datetime, timezone
+from app.services.model_tracking import (
+    save_prediction,
+    calculate_performance_metrics
+)
 
 from app.services.llm import run_llm
 from app.services.nba_prop_builder import build_nba_props_from_roster
@@ -185,15 +190,10 @@ async def ai_predict(req):
 
                 prop["injury_status"] = status
 
-                # ❌ Excluir OUT / DOUBTFUL
                 if status in ["out", "doubtful"]:
                     continue
 
-                # ⚠ Penalizar QUESTIONABLE
-                if status == "questionable":
-                    prop["reliability_factor"] = 0.4
-                else:
-                    prop["reliability_factor"] = 0.6
+                prop["reliability_factor"] = 0.4 if status == "questionable" else 0.6
 
                 projection = wspm_nba_projection(
                     prop, odds, script
@@ -201,7 +201,6 @@ async def ai_predict(req):
 
                 minutes_proj = projection.get("projected_minutes", 0)
 
-                # ❌ Excluir < 20 minutos
                 if minutes_proj < 20:
                     continue
 
@@ -209,53 +208,20 @@ async def ai_predict(req):
                 prop["projected_minutes"] = minutes_proj
 
                 mean = projection.get("mean", 0)
-
                 if mean <= 0:
                     continue
 
-                # Línea derivada del modelo
                 if prop["type"] == "Points":
                     prop["line"] = round(mean * 0.98)
-                    stat_key = "points"
                 elif prop["type"] == "Rebounds":
                     prop["line"] = round(mean * 0.95)
-                    stat_key = "rebounds"
                 elif prop["type"] == "Assists":
                     prop["line"] = round(mean * 0.93)
-                    stat_key = "assists"
                 else:
                     prop["line"] = round(mean * 0.97)
-                    stat_key = None
 
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
-
-                # 🔥 Histórico L10
-                if stat_key:
-                    try:
-                        game_log = await get_player_game_log(
-                            prop["player_id"],
-                            last_n=10
-                        )
-
-                        form_analysis = analyze_player_form(
-                            game_log,
-                            stat_key,
-                            prop["line"],
-                            minutes_proj
-                        )
-
-                        prop["recent_form"] = form_analysis
-
-                        if form_analysis.get("avg_last_n") is not None:
-                            delta = round(
-                                form_analysis["avg_last_n"] - mean,
-                                2
-                            )
-                            prop["model_vs_recent_delta"] = delta
-
-                    except Exception as e:
-                        print("⚠️ L10 fetch error:", e)
 
                 filtered_props.append(prop)
 
@@ -290,27 +256,7 @@ async def ai_predict(req):
                 matrix, total_line
             )
 
-            # ======================================================
-# ⚽ BUILD SOCCER MARKETS
-# ======================================================
-
-            player_props = []
-
-            # ---------- TOTAL GOALS ----------
-            raw_over = implied_probability(odds.get("over_odds"))
-            raw_under = implied_probability(odds.get("under_odds"))
-
-            hold = 0
-            fair_over = None
-            fair_under = None
-
-            if raw_over and raw_under:
-                hold = raw_over + raw_under - 1
-                if hold > -1:
-                    fair_over = raw_over / (1 + hold)
-                    fair_under = raw_under / (1 + hold)
-
-            total_prop = {
+            player_props = [{
                 "name": "Match Total Goals",
                 "role": "team",
                 "type": "total_goals",
@@ -321,61 +267,8 @@ async def ai_predict(req):
                 "over_odds": odds.get("over_odds"),
                 "under_odds": odds.get("under_odds"),
                 "is_active": True
-            }
+            }]
 
-            # 🔥 Pricing signals
-            if fair_over:
-                total_prop["pricing_signals"] = {
-                    "raw_implied_over": round(raw_over, 4),
-                    "raw_implied_under": round(raw_under, 4),
-                    "book_hold": round(hold, 4),
-                    "fair_prob_over": round(fair_over, 4),
-                    "fair_prob_under": round(fair_under, 4),
-                    "model_vs_fair_delta": round(markets["over"] - fair_over, 4)
-                }
-
-            player_props.append(total_prop)
-
-
-            # ---------- BOTH TEAMS TO SCORE ----------
-            btts_prop = {
-                "name": "Both Teams To Score",
-                "role": "team",
-                "type": "btts",
-                "line": None,
-                "projection_model": xg,
-                "model_prob_yes": markets["btts_yes"],
-                "model_prob_no": markets["btts_no"],
-                "is_active": True
-            }
-
-            player_props.append(btts_prop)
-
-
-            # ---------- FULL TIME RESULT ----------
-            player_props.append({
-                "name": "Full Time Result - Home",
-                "role": "team",
-                "type": "moneyline_home",
-                "model_prob": markets["home_win"],
-                "is_active": True
-            })
-
-            player_props.append({
-                "name": "Full Time Result - Draw",
-                "role": "team",
-                "type": "moneyline_draw",
-                "model_prob": markets["draw"],
-                "is_active": True
-            })
-
-            player_props.append({
-                "name": "Full Time Result - Away",
-                "role": "team",
-                "type": "moneyline_away",
-                "model_prob": markets["away_win"],
-                "is_active": True
-            })
         else:
             return {"ERROR": "Unsupported sport"}
 
@@ -391,14 +284,25 @@ async def ai_predict(req):
 
             normalize_prop(prop)
 
-            prop.update(
-                player_prop_confidence(prop, script, sport)
-            )
+            prop.update(player_prop_confidence(prop, script, sport))
 
             prop = validate_model_projection(prop)
             prop = calculate_betting_edge(prop)
             prop = apply_validated_edge(prop)
             prop = classify_bet(prop)
+
+            # 🔥 SAVE VALUE BETS
+            if prop.get("bet_tier") in [
+                "VALUE_BET",
+                "STRONG_VALUE",
+                "ELITE_VALUE"
+            ]:
+                save_prediction(
+                    event_id=event_id,
+                    market_type=prop.get("type"),
+                    bet_tier=prop.get("bet_tier"),
+                    odds=prop.get("over_odds") or -110
+                )
 
             enriched_props.append(prop)
 
@@ -417,11 +321,14 @@ async def ai_predict(req):
         elif sport == "basketball":
             final_prompt = nba_prompt(match, odds, tipster_decisions)
         else:
-            final_prompt = soccer_prompt(
-                match, odds, tipster_decisions, {}
-            )
+            final_prompt = soccer_prompt(match, odds, tipster_decisions, {})
 
         analysis = run_llm(final_prompt)
+
+        # ======================================================
+        # 📊 PERFORMANCE REAL
+        # ======================================================
+        performance_metrics = calculate_performance_metrics()
 
         # ======================================================
         # 🏟 TEAM LOGOS
@@ -437,50 +344,47 @@ async def ai_predict(req):
             home_logo = f"https://a.espncdn.com/i/teamlogos/nfl/500/{home_id}.png"
             away_logo = f"https://a.espncdn.com/i/teamlogos/nfl/500/{away_id}.png"
 
+        timestamp = datetime.now(timezone.utc).isoformat()
+
         return {
-    # 🔒 OUTPUT ACTUAL (NO TOCAR)
-    "match": match,
-    "league": raw_league,
-    "odds": odds,
-    "game_script": script,
-    "home_logo": home_logo,
-    "away_logo": away_logo,
-    "player_props": enriched_props,
-    "tipster_decisions": tipster_decisions,
-    "analysis": analysis,
-
-    # 🆕 NUEVO BLOQUE META
-    "meta": {
-        "schema_version": "2.0",
-        "model_engine": "WSPM",
-        "generated_from_event_id": event_id,
-    },
-
-    # 🆕 EVENT INFO (YA TIENES LOS DATOS)
-    "event": {
-        "event_id": event_id,
-        "sport": sport,
-        "league_code": league,
-        "raw_league": raw_league
-    },
-
-    # 🆕 TEAMS STRUCTURE
-    "teams": {
-        "home": {
-            "id": home_id,
-            "name": req.home_team,
-            "logo": home_logo
-        },
-        "away": {
-            "id": away_id,
-            "name": req.away_team,
-            "logo": away_logo
+            "match": match,
+            "league": raw_league,
+            "odds": odds,
+            "game_script": script,
+            "home_logo": home_logo,
+            "away_logo": away_logo,
+            "player_props": enriched_props,
+            "tipster_decisions": tipster_decisions,
+            "analysis": analysis,
+            "meta": {
+                "schema_version": "2.0",
+                "model_engine": "WSPM",
+                "generated_from_event_id": event_id,
+            },
+            "event": {
+                "event_id": event_id,
+                "sport": sport,
+                "league_code": league,
+                "raw_league": raw_league
+            },
+            "teams": {
+                "home": {
+                    "id": home_id,
+                    "name": req.home_team,
+                    "logo": home_logo
+                },
+                "away": {
+                    "id": away_id,
+                    "name": req.away_team,
+                    "logo": away_logo
+                }
+            },
+            "performance_metrics": performance_metrics,
+            "timestamp": timestamp
         }
-    }
-}
-
 
     except Exception as e:
         print("\n💥 FULL TRACEBACK 💥")
         traceback.print_exc()
         return {"ERROR": str(e)}
+
