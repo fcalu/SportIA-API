@@ -70,17 +70,41 @@ def calculate_betting_edge(prop):
     market_type = prop.get("type")
 
     # ======================================================
-    # ⚽ MONEYLINE (NO PASA POR OVER/UNDER)
+    # ⚽ MONEYLINE 1X2
     # ======================================================
-    if market_type == "moneyline":
-        prop["edge_over"] = 0
-        prop["edge_under"] = 0
-        prop["market_prob_over"] = None
-        prop["market_prob_under"] = None
+    if market_type in [
+        "moneyline_home",
+        "moneyline_draw",
+        "moneyline_away",
+        "double_chance_home",
+        "double_chance_away"
+    ]:
+
+        model_prob = prop.get("model_prob")
+        market_prob = prop.get("market_implied_prob")
+
+        if model_prob is None or market_prob is None:
+            prop["edge"] = 0
+            prop["market_prob"] = market_prob
+            return prop
+
+        edge = model_prob - market_prob
+
+        prop["market_prob"] = market_prob
+        prop["edge"] = round(edge, 4)
+
+        # Compatibilidad con sistema existente
+        prop["model_prob_over"] = model_prob
+        prop["model_prob_under"] = 1 - model_prob
+        prop["market_prob_over"] = market_prob
+        prop["market_prob_under"] = 1 - market_prob
+        prop["edge_over"] = round(edge, 4)
+        prop["edge_under"] = round(-edge, 4)
+
         return prop
 
     # ======================================================
-    # ⚽ SOCCER TOTALS Y BTTS (YA VIENEN CON PROB REAL)
+    # ⚽ TOTALS & BTTS
     # ======================================================
     if market_type in ["total_goals", "btts"]:
 
@@ -95,6 +119,7 @@ def calculate_betting_edge(prop):
     # 🏀🏈 NORMAL DISTRIBUTION (NBA / NFL)
     # ======================================================
     else:
+
         model_data = prop.get("projection_model", {})
 
         if isinstance(model_data, dict):
@@ -103,7 +128,10 @@ def calculate_betting_edge(prop):
         else:
             mean = float(model_data)
             std = max(mean * 0.2, 1)
-            prop["projection_model"] = {"mean": mean, "std_dev": std}
+            prop["projection_model"] = {
+                "mean": mean,
+                "std_dev": std
+            }
 
         line = float(prop.get("line", 0))
 
@@ -111,13 +139,12 @@ def calculate_betting_edge(prop):
         model_under = prob_under(line, mean, std)
 
     # ======================================================
-    # 💰 MARKET PROBABILITIES
+    # 💰 MARKET PROBABILITIES (OVER/UNDER TYPE)
     # ======================================================
 
     over_odds = prop.get("over_odds")
     under_odds = prop.get("under_odds")
 
-    # 🔥 SI NO HAY CUOTAS → NO HAY EDGE
     if over_odds is None or under_odds is None:
         prop["model_prob_over"] = model_over
         prop["model_prob_under"] = model_under
@@ -127,7 +154,6 @@ def calculate_betting_edge(prop):
         prop["edge_under"] = 0
         return prop
 
-    # Si sí hay cuotas reales
     market_over, market_under = no_vig_prob(over_odds, under_odds)
 
     prop["model_prob_over"] = model_over
@@ -139,7 +165,6 @@ def calculate_betting_edge(prop):
     prop["edge_under"] = round((model_under or 0) - market_under, 4)
 
     return prop
-
 # ==========================================================
 # 🧠 EDGE AJUSTADO POR FIABILIDAD
 # ==========================================================
