@@ -182,32 +182,48 @@ def apply_validated_edge(prop):
 # 🎯 DECISION LAYER
 # ==========================================================
 def classify_bet(prop):
-
+    
     validation = prop.get("model_validation", {})
     confidence = prop.get("confidence", 50)
 
     if validation.get("is_outlier") or validation.get("exceeds_physical_limits"):
-        prop["bet_tier"] = "NO BET"
+        prop["bet_tier"] = "NO_BET"
         prop["bet_decision"] = "PASS"
         return prop
 
+    # Para moneyline y double chance
+    edge_simple = prop.get("edge")
+
+    if edge_simple is not None:
+        if edge_simple > 0.08 and confidence >= 70:
+            prop["bet_tier"] = "STRONG_VALUE"
+            prop["bet_decision"] = "PLAY"
+        elif edge_simple > 0.05:
+            prop["bet_tier"] = "VALUE_BET"
+            prop["bet_decision"] = "PLAY"
+        else:
+            prop["bet_tier"] = "NO_BET"
+            prop["bet_decision"] = "PASS"
+        return prop
+
+    # Para OVER/UNDER clásicos
     edge_over = prop.get("edge_over", 0)
     edge_under = prop.get("edge_under", 0)
 
     if edge_over > 0.08 and confidence >= 70:
-        tier = "VALUE BET - STRONG"
+        tier = "STRONG_VALUE"
         decision = "OVER"
     elif edge_under > 0.08 and confidence >= 70:
-        tier = "VALUE BET - STRONG"
+        tier = "STRONG_VALUE"
         decision = "UNDER"
     elif edge_over > 0.05:
-        tier = "VALUE BET"
+        tier = "VALUE_BET"
         decision = "OVER"
     elif edge_under > 0.05:
-        tier = "VALUE BET"
+        tier = "VALUE_BET"
         decision = "UNDER"
     else:
-        tier = "NO BET"
+        tier = "NO_BET"
         decision = "PASS"
 
     prop["bet_tier"] = tier
