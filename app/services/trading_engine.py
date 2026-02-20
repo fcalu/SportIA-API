@@ -229,4 +229,4 @@ def classify_bet(prop):
     prop["bet_tier"] = tier
     prop["bet_decision"] = decision
 
-    return prop
+    return prop 
