@@ -231,7 +231,7 @@ async def ai_predict(req):
         # ⚽ SOCCER
         # ======================================================
         elif sport == "soccer":
-
+    
             home_id, away_id = await get_event_teams(
                 sport, league, event_id
             )
@@ -256,7 +256,13 @@ async def ai_predict(req):
                 matrix, total_line
             )
 
-            player_props = [{
+            player_props = []
+
+            # ======================================================
+            # 🎯 TOTAL GOALS
+            # ======================================================
+
+            player_props.append({
                 "name": "Match Total Goals",
                 "role": "team",
                 "type": "total_goals",
@@ -267,7 +273,74 @@ async def ai_predict(req):
                 "over_odds": odds.get("over_odds"),
                 "under_odds": odds.get("under_odds"),
                 "is_active": True
-            }]
+            })
+
+            # ======================================================
+            # 🎯 BOTH TEAMS TO SCORE
+            # ======================================================
+
+            player_props.append({
+                "name": "Both Teams To Score",
+                "role": "team",
+                "type": "btts",
+                "model_prob_yes": markets["btts_yes"],
+                "model_prob_no": markets["btts_no"],
+                "is_active": True
+            })
+
+            # ======================================================
+            # 🎯 FULL TIME RESULT (1X2)
+            # ======================================================
+
+            player_props.append({
+                "name": "Full Time Result - Home",
+                "role": "team",
+                "type": "moneyline_home",
+                "model_prob": markets["home_win"],
+                "market_implied_prob": implied_probability(
+                    odds.get("home_moneyline")
+                ),
+                "is_active": True
+            })
+
+            player_props.append({
+                "name": "Full Time Result - Draw",
+                "role": "team",
+                "type": "moneyline_draw",
+                "model_prob": markets["draw"],
+                "is_active": True
+            })
+
+            player_props.append({
+                "name": "Full Time Result - Away",
+                "role": "team",
+                "type": "moneyline_away",
+                "model_prob": markets["away_win"],
+                "market_implied_prob": implied_probability(
+                    odds.get("away_moneyline")
+                ),
+                "is_active": True
+            })
+
+            # ======================================================
+            # 🎯 DOUBLE CHANCE
+            # ======================================================
+
+            player_props.append({
+                "name": "Double Chance - Home or Draw",
+                "role": "team",
+                "type": "double_chance_home",
+                "model_prob": markets["double_chance_home"],
+                "is_active": True
+            })
+
+            player_props.append({
+                "name": "Double Chance - Away or Draw",
+                "role": "team",
+                "type": "double_chance_away",
+                "model_prob": markets["double_chance_away"],
+                "is_active": True
+            })
 
         else:
             return {"ERROR": "Unsupported sport"}
