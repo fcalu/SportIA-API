@@ -289,17 +289,34 @@ async def ai_predict(req):
             })
 
             # ======================================================
-            # 🎯 FULL TIME RESULT (1X2)
+            # 🎯 1X2 CON HOLD NORMALIZADO
             # ======================================================
+
+            home_ml = odds.get("home_moneyline")
+            away_ml = odds.get("away_moneyline")
+            draw_ml = odds.get("draw_moneyline")  # si no existe será None
+
+            home_raw = implied_probability(home_ml)
+            away_raw = implied_probability(away_ml)
+            draw_raw = implied_probability(draw_ml) if draw_ml else None
+
+            home_fair = None
+            away_fair = None
+            draw_fair = None
+
+            if home_raw and away_raw and draw_raw:
+                hold = home_raw + away_raw + draw_raw - 1
+                if hold > -1:
+                    home_fair = home_raw / (1 + hold)
+                    away_fair = away_raw / (1 + hold)
+                    draw_fair = draw_raw / (1 + hold)
 
             player_props.append({
                 "name": "Full Time Result - Home",
                 "role": "team",
                 "type": "moneyline_home",
                 "model_prob": markets["home_win"],
-                "market_implied_prob": implied_probability(
-                    odds.get("home_moneyline")
-                ),
+                "market_implied_prob": home_fair,
                 "is_active": True
             })
 
@@ -308,6 +325,7 @@ async def ai_predict(req):
                 "role": "team",
                 "type": "moneyline_draw",
                 "model_prob": markets["draw"],
+                "market_implied_prob": draw_fair,
                 "is_active": True
             })
 
@@ -316,31 +334,36 @@ async def ai_predict(req):
                 "role": "team",
                 "type": "moneyline_away",
                 "model_prob": markets["away_win"],
-                "market_implied_prob": implied_probability(
-                    odds.get("away_moneyline")
-                ),
+                "market_implied_prob": away_fair,
                 "is_active": True
             })
 
             # ======================================================
-            # 🎯 DOUBLE CHANCE
+            # 🎯 DOUBLE CHANCE DERIVADO CORRECTAMENTE
             # ======================================================
 
-            player_props.append({
-                "name": "Double Chance - Home or Draw",
-                "role": "team",
-                "type": "double_chance_home",
-                "model_prob": markets["double_chance_home"],
-                "is_active": True
-            })
+            if home_fair and draw_fair and away_fair:
 
-            player_props.append({
-                "name": "Double Chance - Away or Draw",
-                "role": "team",
-                "type": "double_chance_away",
-                "model_prob": markets["double_chance_away"],
-                "is_active": True
-            })
+                dc_home_market = home_fair + draw_fair
+                dc_away_market = away_fair + draw_fair
+
+                player_props.append({
+                    "name": "Double Chance - Home or Draw",
+                    "role": "team",
+                    "type": "double_chance_home",
+                    "model_prob": markets["home_win"] + markets["draw"],
+                    "market_implied_prob": dc_home_market,
+                    "is_active": True
+                })
+
+                player_props.append({
+                    "name": "Double Chance - Away or Draw",
+                    "role": "team",
+                    "type": "double_chance_away",
+                    "model_prob": markets["away_win"] + markets["draw"],
+                    "market_implied_prob": dc_away_market,
+                    "is_active": True
+                })
 
         else:
             return {"ERROR": "Unsupported sport"}
@@ -394,7 +417,15 @@ async def ai_predict(req):
         elif sport == "basketball":
             final_prompt = nba_prompt(match, odds, tipster_decisions)
         else:
-            final_prompt = soccer_prompt(match, odds, tipster_decisions, {})
+            final_prompt = soccer_prompt(
+            match,
+            odds,
+            tipster_decisions,
+            {
+                "xg": xg,
+                "markets": enriched_props
+            }
+        )
 
         analysis = run_llm(final_prompt)
 
