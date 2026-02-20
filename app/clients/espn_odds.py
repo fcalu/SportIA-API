@@ -26,6 +26,35 @@ async def get_event_odds(sport: str, league: str, event_id: str):
 
     book = data["items"][0]  # Normalmente DraftKings
 
+    # ======================================================
+    # 🔎 EXTRAER DRAW MONEYLINE (SOCCER)
+    # ======================================================
+
+    draw_moneyline = None
+
+    if sport == "soccer":
+
+        links = book.get("links", [])
+
+        for link in links:
+            rel = link.get("rel", [])
+            href = link.get("href", "")
+
+            # ESPN usa "draw" en rel
+            if "draw" in rel:
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        draw_resp = await client.get(href)
+                        if draw_resp.status_code == 200:
+                            draw_data = draw_resp.json()
+                            draw_moneyline = draw_data.get("moneyLine")
+                except Exception:
+                    draw_moneyline = None
+
+    # ======================================================
+    # RETURN STRUCTURE
+    # ======================================================
+
     return {
         "provider": book.get("provider", {}).get("name", "Unknown"),
         "raw_details": book.get("details"),
@@ -37,6 +66,7 @@ async def get_event_odds(sport: str, league: str, event_id: str):
         # 💰 MONEYLINE
         "home_moneyline": book.get("homeTeamOdds", {}).get("moneyLine"),
         "away_moneyline": book.get("awayTeamOdds", {}).get("moneyLine"),
+        "draw_moneyline": draw_moneyline,  # ← NUEVO
 
         # 📉 SPREAD VISUAL
         "home_spread": book.get("homeTeamOdds", {})
@@ -54,7 +84,7 @@ async def get_event_odds(sport: str, league: str, event_id: str):
                      .get("total", {})
                      .get("alternateDisplayValue"),
 
-        # ⚖️ ODDS (por si quieres edge por precio luego)
+        # ⚖️ ODDS
         "over_odds": book.get("overOdds"),
         "under_odds": book.get("underOdds"),
         "home_spread_odds": book.get("homeTeamOdds", {}).get("spreadOdds"),
