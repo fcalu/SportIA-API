@@ -1,81 +1,96 @@
 import httpx
+import asyncio
+import time
 from datetime import datetime, timedelta
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
+# Cache en memoria para evitar saturar ESPN
+_CACHE = {}
+CACHE_TTL = 600 # 10 minutos
+
 SPORT_PATHS = {
    "soccer": [
-    "soccer/eng.1",
-    "soccer/eng.2",
-    "soccer/esp.1",
-    "soccer/ger.1",
-    "soccer/ita.1",
-    "soccer/fra.1",
-    "soccer/usa.1",
-    "soccer/usa.nwsl",
-    "soccer/uefa.champions",
-    "soccer/uefa.europa",
-    "soccer/fifa.world",
-    "soccer/mex.1",
-    "soccer/ned.1",
-    "soccer/por.1",
-    "soccer/sco.1",
-    "soccer/bra.1",
-    "soccer/conmebol.libertadores"
+    "soccer/eng.1", "soccer/eng.2", "soccer/esp.1", "soccer/ger.1",
+    "soccer/ita.1", "soccer/fra.1", "soccer/usa.1", "soccer/usa.nwsl",
+    "soccer/uefa.champions", "soccer/uefa.europa", "soccer/mex.1",
+    "soccer/ned.1", "soccer/por.1", "soccer/bra.1", "soccer/conmebol.libertadores"
 ],
-
     "nba": ["basketball/nba"],
     "nfl": ["football/nfl"],
 }
 
-def _nba_date_range():
+# Reducido a 3 días para evitar exceso de datos
+def _get_date_range(days=3):
     today = datetime.utcnow().date()
-    end = today + timedelta(days=7)
-    return f"{today.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
-
-def _soccer_date_range():
-    today = datetime.utcnow().date()
-    end = today + timedelta(days=14)
+    end = today + timedelta(days=days-1)
     return f"{today.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
 
 async def get_scoreboard(path: str, sport: str):
+    cache_key = f"{path}_{sport}"
+    now = time.time()
+
+    # 1. Retornar cache si existe y es joven
+    if cache_key in _CACHE:
+        timestamp, data = _CACHE[cache_key]
+        if now - timestamp < CACHE_TTL:
+            return data
+
+    # 2. Configurar URL con el nuevo rango de 3 días
     url = f"{BASE}/{path}/scoreboard"
+    date_range = _get_date_range(days=3)
+    url += f"?dates={date_range}"
 
-    if sport == "nba":
-        url += f"?dates={_nba_date_range()}"
-
-    if sport == "soccer":
-        url += f"?dates={_soccer_date_range()}"
-
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.get(url)
-        r.raise_for_status()
-        return r.json()
+    async with httpx.AsyncClient(timeout=15) as c:
+        try:
+            r = await c.get(url)
+            r.raise_for_status()
+            data = r.json()
+            # Guardar en cache
+            _CACHE[cache_key] = (now, data)
+            return data
+        except Exception as e:
+            print(f"Error cargando {path}: {e}")
+            # Si falla pero hay cache vieja, usarla
+            if cache_key in _CACHE: return _CACHE[cache_key][1]
+            return {"events": []}
 
 async def upcoming_matches(sport: str):
+    paths = SPORT_PATHS.get(sport, [])
+    
+    # EJECUCIÓN EN PARALELO: Esto es mucho más rápido que el for loop
+    tasks = [get_scoreboard(path, sport) for path in paths]
+    results = await asyncio.gather(*tasks)
+
     events = []
-    for path in SPORT_PATHS.get(sport, []):
-        data = await get_scoreboard(path, sport)
+    # Procesar resultados
+    for i, data in enumerate(results):
+        current_path = paths[i]
         for e in data.get("events", []):
             if e.get("status", {}).get("type", {}).get("state") == "pre":
-                comp = e["competitions"][0]["competitors"]
-                h = next(x for x in comp if x["homeAway"]=="home")
-                a = next(x for x in comp if x["homeAway"]=="away")
-                events.append({
-                    "sport": sport,
-                    "league": path,
-                    "event_id": e["id"],
-                    "home": h["team"]["displayName"],
-                    "away": a["team"]["displayName"],
-                    "start_time": e["date"]
-                })
-    if not events and sport == "soccer":
-        return [{
-            "sport": "soccer",
-            "league": "demo",
-            "event_id": "demo-001",
-            "home": "Internazionale",
-            "away": "Pisa",
-            "start_time": "2026-01-23T19:45Z"
-        }]
+                try:
+                    comp = e["competitions"][0]["competitors"]
+                    h = next(x for x in comp if x["homeAway"]=="home")
+                    a = next(x for x in comp if x["homeAway"]=="away")
+                    
+                    events.append({
+                        "sport": sport,
+                        "league": current_path.split('/')[-1].upper(), # Simplifica el nombre de la liga
+                        "event_id": e["id"],
+                        "home": h["team"]["displayName"],
+                        "home_logo": h["team"].get("logo"),
+                        "away": a["team"]["displayName"],
+                        "away_logo": a["team"].get("logo"),
+                        "start_time": e["date"]
+                    })
+                except (KeyError, StopIteration):
+                    continue
+
+    # Ordenar por fecha (más cercanos primero)
+    events.sort(key=lambda x: x["start_time"])
+
+    # Fallback si no hay partidos
+    if not events:
+        return []
+        
     return events
