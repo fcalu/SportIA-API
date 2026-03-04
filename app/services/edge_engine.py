@@ -9,6 +9,60 @@ def calculate_edge(prop=None, odds=None, script=None, sport=None, league=None):
     # ⚽ SOCCER — EDGE BASADO EN PROBABILIDADES
     # ======================================================
     if sport == "soccer":
+    
+        market_type = prop.get("type")
+
+        # ======================================================
+        # 1️⃣ MONEYLINE 1X2 (HOME / DRAW / AWAY)
+        # ======================================================
+
+        if market_type in ["moneyline_home", "moneyline_draw", "moneyline_away"]:
+
+            model_prob = prop.get("model_prob")
+            odds = prop.get("odds")
+
+            if model_prob is None or odds is None:
+                prop["edge"] = 0
+                prop["bet_tier"] = "NO_BET"
+                prop["bet_decision"] = "PASS"
+                return prop
+
+            implied = implied_probability(odds)
+
+            edge = model_prob - implied
+
+            prop["market_prob"] = round(implied, 4)
+            prop["edge"] = round(edge, 4)
+
+            # ---------- Expected Value ----------
+            decimal = 1 + (odds / 100) if odds > 0 else 1 + (100 / abs(odds))
+            ev = model_prob * decimal - 1
+
+            prop["expected_value"] = round(ev, 4)
+
+            # ---------- Bet Decision ----------
+            prop["bet_decision"] = "PLAY" if edge > 0 else "PASS"
+
+            # ---------- Bet Tier ----------
+            if edge <= 0:
+                tier = "NO_BET"
+            elif edge < 0.02:
+                tier = "LEAN"
+            elif edge < 0.05:
+                tier = "VALUE_BET"
+            elif edge < 0.08:
+                tier = "STRONG_VALUE"
+            else:
+                tier = "ELITE_VALUE"
+
+            prop["bet_tier"] = tier
+
+            return prop
+
+
+        # ======================================================
+        # 2️⃣ TOTAL GOALS (OVER / UNDER)
+        # ======================================================
 
         model_over = prop.get("model_prob_over")
         model_under = prop.get("model_prob_under")
@@ -22,24 +76,27 @@ def calculate_edge(prop=None, odds=None, script=None, sport=None, league=None):
         implied_under = None
 
         # ---------- OVER ----------
-        if over_odds and model_over:
+        if over_odds is not None and model_over is not None:
             implied_over = implied_probability(over_odds)
             edge_over = model_over - implied_over
 
         # ---------- UNDER ----------
-        if under_odds and model_under:
+        if under_odds is not None and model_under is not None:
             implied_under = implied_probability(under_odds)
             edge_under = model_under - implied_under
 
-        # Determinar mejor lado
+        # ---------- Mejor lado ----------
         if edge_over >= edge_under:
             edge = edge_over
             decision = "OVER"
+            odds = over_odds
+            prob = model_over
         else:
             edge = edge_under
             decision = "UNDER"
+            odds = under_odds
+            prob = model_under
 
-        # Guardar métricas
         prop["edge"] = round(edge, 4)
         prop["edge_over"] = round(edge_over, 4)
         prop["edge_under"] = round(edge_under, 4)
@@ -49,20 +106,20 @@ def calculate_edge(prop=None, odds=None, script=None, sport=None, league=None):
 
         prop["bet_decision"] = decision
 
-        # ---------- Expected Value ----------
-        if decision == "OVER" and over_odds:
-            decimal = 1 + (over_odds / 100) if over_odds > 0 else 1 + (100 / abs(over_odds))
-            ev = model_over * decimal - 1
-        elif decision == "UNDER" and under_odds:
-            decimal = 1 + (under_odds / 100) if under_odds > 0 else 1 + (100 / abs(under_odds))
-            ev = model_under * decimal - 1
+        # ======================================================
+        # EXPECTED VALUE
+        # ======================================================
+
+        if odds:
+            decimal = 1 + (odds / 100) if odds > 0 else 1 + (100 / abs(odds))
+            ev = prob * decimal - 1
         else:
             ev = 0
 
         prop["expected_value"] = round(ev, 4)
 
         # ======================================================
-        # TIERS DE APUESTA (MEJORADOS)
+        # BET TIERS
         # ======================================================
 
         if edge <= 0:
