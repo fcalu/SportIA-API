@@ -165,6 +165,33 @@ def calculate_betting_edge(prop):
     prop["edge_under"] = round((model_under or 0) - market_under, 4)
 
     return prop
+
+# ==========================================================
+# 📉 MARKET EFFICIENCY FILTER
+# ==========================================================
+def market_efficiency_filter(prop, threshold=0.03):
+    """
+    Si el modelo y el mercado están demasiado alineados,
+    se considera mercado eficiente → no bet.
+    """
+
+    market_prob = prop.get("market_prob_over")
+    model_prob = prop.get("model_prob_over")
+
+    if market_prob is None or model_prob is None:
+        return prop
+
+    diff = abs(model_prob - market_prob)
+
+    if diff < threshold:
+        prop["bet_tier"] = "NO_BET"
+        prop["bet_decision"] = "PASS"
+        prop["market_efficiency_block"] = True
+    else:
+        prop["market_efficiency_block"] = False
+
+    return prop
+
 # ==========================================================
 # 🧠 EDGE AJUSTADO POR FIABILIDAD
 # ==========================================================

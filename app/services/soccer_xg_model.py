@@ -21,7 +21,7 @@ LEAGUE_BASELINES = {
     "default": 2.5
 }
 
-HOME_ADVANTAGE = 1.08
+HOME_ADVANTAGE = 1.06
 REGRESSION_WEIGHT = 0.30   # antes era 0.50 implícito
 
 
@@ -34,8 +34,8 @@ def calculate_team_strength(team_stats, league_avg):
     goals_against = safe_float(team_stats.get("goals_against"), league_avg / 2)
     games = max(safe_float(team_stats.get("games_played"), 10), 1)
 
-    gf_per_game = goals_for / games
-    ga_per_game = goals_against / games
+    gf_per_game = max(min(goals_for / games, 3.2), 0.6)
+    ga_per_game = max(min(goals_against / games, 3.2), 0.6)
 
     league_half = league_avg / 2
 
@@ -76,6 +76,21 @@ def expected_goals_match(home_stats, away_stats, league="default"):
     away_xg = league_half * away_attack_rel * home_def_rel
 
     total_xg = home_xg + away_xg
+
+        # =========================================
+    # 📊 MARKET TOTAL CALIBRATION
+    # =========================================
+
+    market_total = league_avg
+
+    model_total = home_xg + away_xg
+
+    if model_total > 0:
+
+        scale = market_total / model_total
+
+        home_xg *= scale
+        away_xg *= scale
 
     return {
         "home_xg": round(home_xg, 2),

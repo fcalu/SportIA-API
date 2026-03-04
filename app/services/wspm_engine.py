@@ -163,8 +163,8 @@ def derive_soccer_markets(matrix, market_line):
 # ⚽ SOCCER PROJECTION ENGINE
 # ==========================================================
 def wspm_soccer_projection(home_xg, away_xg, market_line, odds=None):
-
-    # Optional calibration
+    
+    # Optional calibration with moneyline
     if odds:
         home_ml = odds.get("home_moneyline")
         away_ml = odds.get("away_moneyline")
@@ -185,6 +185,20 @@ def wspm_soccer_projection(home_xg, away_xg, market_line, odds=None):
 
                 home_xg *= (1 + adjustment)
                 away_xg *= (1 - adjustment)
+
+    # ==========================================================
+    # 📊 MARKET CALIBRATION
+    # ==========================================================
+
+    market_total = market_line + 0.05
+    model_total = home_xg + away_xg
+
+    if model_total > 0:
+
+        scale = market_total / model_total
+
+        home_xg *= scale
+        away_xg *= scale
 
     matrix = build_score_matrix(home_xg, away_xg)
 

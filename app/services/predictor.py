@@ -34,6 +34,7 @@ from app.services.trading_engine import (
     validate_model_projection,
     calculate_betting_edge,
     apply_validated_edge,
+    market_efficiency_filter,
     classify_bet
 )
 
@@ -304,12 +305,13 @@ async def ai_predict(req):
             away_fair = None
             draw_fair = None
 
-            if home_raw and away_raw and draw_raw:
-                hold = home_raw + away_raw + draw_raw - 1
-                if hold > -1:
-                    home_fair = home_raw / (1 + hold)
-                    away_fair = away_raw / (1 + hold)
-                    draw_fair = draw_raw / (1 + hold)
+            if home_raw and away_raw:
+                total = home_raw + away_raw + (draw_raw or 0)
+
+                home_fair = home_raw / total
+                away_fair = away_raw / total
+
+                draw_fair = draw_raw / total if draw_raw else None
 
             player_props.append({
                 "name": "Full Time Result - Home",
@@ -385,6 +387,7 @@ async def ai_predict(req):
             prop = validate_model_projection(prop)
             prop = calculate_betting_edge(prop)
             prop = apply_validated_edge(prop)
+            prop = market_efficiency_filter(prop)
             prop = classify_bet(prop)
 
             # 🔥 SAVE VALUE BETS

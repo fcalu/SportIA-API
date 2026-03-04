@@ -8,7 +8,21 @@ from itertools import product
 def poisson_pmf(lmbda, k):
     return (lmbda ** k) * math.exp(-lmbda) / math.factorial(k)
 
+# ==========================================================
+# ⚽ DIXON-COLES ADJUSTMENT
+# ==========================================================
+def dixon_coles_adjustment(h, a, rho=-0.05):
 
+    if h == 0 and a == 0:
+        return 1 - rho
+    elif h == 0 and a == 1:
+        return 1 + rho
+    elif h == 1 and a == 0:
+        return 1 + rho
+    elif h == 1 and a == 1:
+        return 1 - rho
+    else:
+        return 1
 # ==========================================================
 # ⚽ BUILD SCORE MATRIX
 # ==========================================================
@@ -16,7 +30,12 @@ def build_score_matrix(home_xg, away_xg, max_goals=8):
     matrix = {}
 
     for h, a in product(range(max_goals + 1), repeat=2):
+
         prob = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a)
+
+        # Dixon-Coles correction
+        prob *= dixon_coles_adjustment(h, a)
+
         matrix[(h, a)] = prob
 
     # 🔹 Normalización para evitar truncamiento
