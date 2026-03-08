@@ -21,8 +21,9 @@ LEAGUE_BASELINES = {
     "default": 2.5
 }
 
-HOME_ADVANTAGE = 1.06
-REGRESSION_WEIGHT = 0.30   # antes era 0.50 implícito
+HOME_ADVANTAGE = 1.09
+REGRESSION_WEIGHT = 0.30
+MARKET_BLEND = 0.35   # mezcla entre modelo y promedio liga
 
 
 # =========================================
@@ -39,7 +40,7 @@ def calculate_team_strength(team_stats, league_avg):
 
     league_half = league_avg / 2
 
-    # 🔥 Regresión ponderada realista
+    # 🔥 Regresión ponderada
     attack_strength = (
         (1 - REGRESSION_WEIGHT) * gf_per_game
         + REGRESSION_WEIGHT * league_half
@@ -61,36 +62,42 @@ def expected_goals_match(home_stats, away_stats, league="default"):
     league_avg = LEAGUE_BASELINES.get(league, LEAGUE_BASELINES["default"])
     league_half = league_avg / 2
 
-    # 🔥 Usar función correcta de fuerza
+    # calcular fuerza equipos
     home_attack, home_defense = calculate_team_strength(home_stats, league_avg)
     away_attack, away_defense = calculate_team_strength(away_stats, league_avg)
 
-    # Convertir a fuerza relativa
+    # convertir a fuerza relativa
     home_attack_rel = home_attack / league_half
     home_def_rel = home_defense / league_half
     away_attack_rel = away_attack / league_half
     away_def_rel = away_defense / league_half
 
-    # Modelo multiplicativo
+    # modelo multiplicativo
     home_xg = league_half * home_attack_rel * away_def_rel * HOME_ADVANTAGE
     away_xg = league_half * away_attack_rel * home_def_rel
 
-    total_xg = home_xg + away_xg
+    model_total = home_xg + away_xg
 
-        # =========================================
-    # 📊 MARKET TOTAL CALIBRATION
+    # =========================================
+    # 📊 MARKET TOTAL CALIBRATION (MEJORADA)
     # =========================================
 
     market_total = league_avg
 
-    model_total = home_xg + away_xg
+    adjusted_total = (
+        (1 - MARKET_BLEND) * model_total
+        + MARKET_BLEND * market_total
+    )
 
     if model_total > 0:
 
-        scale = market_total / model_total
+        scale = adjusted_total / model_total
 
         home_xg *= scale
         away_xg *= scale
+
+    # 🔥 recalcular total_xg correctamente
+    total_xg = home_xg + away_xg
 
     return {
         "home_xg": round(home_xg, 2),
