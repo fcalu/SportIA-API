@@ -280,14 +280,27 @@ async def ai_predict(req):
             # 🎯 BOTH TEAMS TO SCORE
             # ======================================================
 
+            btts_yes_odds = odds.get("btts_yes")
+            btts_no_odds = odds.get("btts_no")
+            # fallback si sportsbook no trae mercado BTTS
+            if not btts_yes_odds and odds.get("over_odds"):
+                btts_yes_odds = odds.get("over_odds")
+
+            if not btts_no_odds and odds.get("under_odds"):
+                btts_no_odds = odds.get("under_odds")
+
+
             player_props.append({
                 "name": "Both Teams To Score",
                 "role": "team",
                 "type": "btts",
                 "model_prob_yes": markets["btts_yes"],
                 "model_prob_no": markets["btts_no"],
+                "yes_odds": btts_yes_odds,
+                "no_odds": btts_no_odds,
                 "is_active": True
             })
+
 
             # ======================================================
             # 🎯 1X2 CON HOLD NORMALIZADO
@@ -396,12 +409,21 @@ async def ai_predict(req):
                 "STRONG_VALUE",
                 "ELITE_VALUE"
             ]:
-                save_prediction(
-                    event_id=event_id,
-                    market_type=prop.get("type"),
-                    bet_tier=prop.get("bet_tier"),
-                    odds=prop.get("over_odds") or -110
-                )
+                odds_value = (
+                prop.get("over_odds")
+                or prop.get("yes_odds")
+                or prop.get("home_moneyline")
+                or prop.get("away_moneyline")
+                or -110
+            )
+
+            save_prediction(
+                event_id=event_id,
+                market_type=prop.get("type"),
+                bet_tier=prop.get("bet_tier"),
+                odds=odds_value
+            )
+
 
             enriched_props.append(prop)
 
