@@ -34,7 +34,6 @@ from app.services.trading_engine import (
     validate_model_projection,
     calculate_betting_edge,
     apply_validated_edge,
-    market_efficiency_filter,
     classify_bet
 )
 
@@ -280,27 +279,14 @@ async def ai_predict(req):
             # 🎯 BOTH TEAMS TO SCORE
             # ======================================================
 
-            btts_yes_odds = odds.get("btts_yes")
-            btts_no_odds = odds.get("btts_no")
-            # fallback si sportsbook no trae mercado BTTS
-            if not btts_yes_odds and odds.get("over_odds"):
-                btts_yes_odds = odds.get("over_odds")
-
-            if not btts_no_odds and odds.get("under_odds"):
-                btts_no_odds = odds.get("under_odds")
-
-
             player_props.append({
                 "name": "Both Teams To Score",
                 "role": "team",
                 "type": "btts",
                 "model_prob_yes": markets["btts_yes"],
                 "model_prob_no": markets["btts_no"],
-                "yes_odds": btts_yes_odds,
-                "no_odds": btts_no_odds,
                 "is_active": True
             })
-
 
             # ======================================================
             # 🎯 1X2 CON HOLD NORMALIZADO
@@ -318,13 +304,12 @@ async def ai_predict(req):
             away_fair = None
             draw_fair = None
 
-            if home_raw and away_raw:
-                total = home_raw + away_raw + (draw_raw or 0)
-
-                home_fair = home_raw / total
-                away_fair = away_raw / total
-
-                draw_fair = draw_raw / total if draw_raw else None
+            if home_raw and away_raw and draw_raw:
+                hold = home_raw + away_raw + draw_raw - 1
+                if hold > -1:
+                    home_fair = home_raw / (1 + hold)
+                    away_fair = away_raw / (1 + hold)
+                    draw_fair = draw_raw / (1 + hold)
 
             player_props.append({
                 "name": "Full Time Result - Home",
@@ -400,40 +385,20 @@ async def ai_predict(req):
             prop = validate_model_projection(prop)
             prop = calculate_betting_edge(prop)
             prop = apply_validated_edge(prop)
-            prop = market_efficiency_filter(prop)
             prop = classify_bet(prop)
 
             # 🔥 SAVE VALUE BETS
-           
-    # 🔥 SAVE VALUE BETS
-        if prop.get("bet_tier") in [
-            "VALUE_BET",
-            "STRONG_VALUE",
-            "ELITE_VALUE"
-        ]:
-
-            odds_value = (
-                prop.get("over_odds")
-                or prop.get("yes_odds")
-                or prop.get("home_moneyline")
-                or prop.get("away_moneyline")
-                or prop.get("under_odds")
-                or prop.get("no_odds")
-            )
-
-            if odds_value:
-
-                print("💰 VALUE BET SAVED:", prop.get("type"), odds_value)
-
+            if prop.get("bet_tier") in [
+                "VALUE_BET",
+                "STRONG_VALUE",
+                "ELITE_VALUE"
+            ]:
                 save_prediction(
                     event_id=event_id,
                     market_type=prop.get("type"),
                     bet_tier=prop.get("bet_tier"),
-                    odds=odds_value
+                    odds=prop.get("over_odds") or -110
                 )
-
-
-
 
             enriched_props.append(prop)
 
