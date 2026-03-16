@@ -404,25 +404,35 @@ async def ai_predict(req):
             prop = classify_bet(prop)
 
             # 🔥 SAVE VALUE BETS
-            if prop.get("bet_tier") in [
-                "VALUE_BET",
-                "STRONG_VALUE",
-                "ELITE_VALUE"
-            ]:
-                odds_value = (
+           
+    # 🔥 SAVE VALUE BETS
+        if prop.get("bet_tier") in [
+            "VALUE_BET",
+            "STRONG_VALUE",
+            "ELITE_VALUE"
+        ]:
+
+            odds_value = (
                 prop.get("over_odds")
                 or prop.get("yes_odds")
                 or prop.get("home_moneyline")
                 or prop.get("away_moneyline")
-                or -110
+                or prop.get("under_odds")
+                or prop.get("no_odds")
             )
 
-            save_prediction(
-                event_id=event_id,
-                market_type=prop.get("type"),
-                bet_tier=prop.get("bet_tier"),
-                odds=odds_value
-            )
+            if odds_value:
+
+                print("💰 VALUE BET SAVED:", prop.get("type"), odds_value)
+
+                save_prediction(
+                    event_id=event_id,
+                    market_type=prop.get("type"),
+                    bet_tier=prop.get("bet_tier"),
+                    odds=odds_value
+                )
+
+
 
 
             enriched_props.append(prop)
