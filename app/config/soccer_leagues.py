@@ -9,6 +9,7 @@ SOCCER_SUPPORTED_LEAGUES = {
     "usa.nwsl": "NWSL",
     "uefa.champions": "Champions League",
     "uefa.europa": "Europa League",
+    "uefa.europa.conf": "Europa Conference League",
     "fifa.world": "World Cup",
     "mex.1": "Liga MX",
     "ned.1": "Eredivisie",
