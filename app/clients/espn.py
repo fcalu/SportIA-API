@@ -12,7 +12,7 @@ CACHE_TTL = 600 # 10 minutos
 SPORT_PATHS = {
    "soccer": [
     "soccer/eng.1", "soccer/eng.2", "soccer/esp.1", "soccer/ger.1",
-    "soccer/ita.1", "soccer/fra.1", "soccer/usa.1", "soccer/usa.nwsl",
+    "soccer/ita.1", "soccer/fra.1", "soccer/usa.1", "soccer/uefa.europa.conf",
     "soccer/uefa.champions", "soccer/uefa.europa", "soccer/mex.1",
     "soccer/ned.1", "soccer/por.1", "soccer/bra.1", "soccer/conmebol.libertadores"
 ],
@@ -21,7 +21,7 @@ SPORT_PATHS = {
 }
 
 # Reducido a 3 días para evitar exceso de datos
-def _get_date_range(days=3):
+def _get_date_range(days=4):
     today = datetime.utcnow().date()
     end = today + timedelta(days=days-1)
     return f"{today.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
