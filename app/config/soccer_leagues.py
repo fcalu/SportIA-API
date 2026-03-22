@@ -17,4 +17,5 @@ SOCCER_SUPPORTED_LEAGUES = {
     "sco.1": "Scottish Premiership",
     "bra.1": "Brasileirão",
     "conmebol.libertadores": "Copa Libertadores",
+    "fifa.friendly": "Amistosos Internacionales",
 }

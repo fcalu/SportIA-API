@@ -14,7 +14,8 @@ SPORT_PATHS = {
     "soccer/eng.1", "soccer/eng.2", "soccer/esp.1", "soccer/ger.1",
     "soccer/ita.1", "soccer/fra.1", "soccer/usa.1", "soccer/uefa.europa.conf",
     "soccer/uefa.champions", "soccer/uefa.europa", "soccer/mex.1",
-    "soccer/ned.1", "soccer/por.1", "soccer/bra.1", "soccer/conmebol.libertadores"
+    "soccer/ned.1", "soccer/por.1", "soccer/bra.1", "soccer/conmebol.libertadores", 
+    "soccer/fifa.friendly",
 ],
     "nba": ["basketball/nba"],
     "nfl": ["football/nfl"],
@@ -38,7 +39,7 @@ async def get_scoreboard(path: str, sport: str):
 
     # 2. Configurar URL con el nuevo rango de 3 días
     url = f"{BASE}/{path}/scoreboard"
-    date_range = _get_date_range(days=3)
+    date_range = _get_date_range(days=4)
     url += f"?dates={date_range}"
 
     async with httpx.AsyncClient(timeout=15) as c:
