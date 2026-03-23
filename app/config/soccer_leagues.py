@@ -18,4 +18,5 @@ SOCCER_SUPPORTED_LEAGUES = {
     "bra.1": "Brasileirão",
     "conmebol.libertadores": "Copa Libertadores",
     "fifa.friendly": "Amistosos Internacionales",
+    "arg.1":"Liga Argentina", 
 }
