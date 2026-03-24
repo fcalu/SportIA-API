@@ -20,6 +20,9 @@ LEAGUE_BASELINES = {
     "esp.1": 2.6,
     "ned.1": 3.0,   # Eredivisie más goleadora
     "usa.1": 2.8,   # MLS
+    "fifa.friendly": 2.7,      # Amistosos: Suelen ser abiertos, más goles (Promedio ~2.65 - 2.8)
+    "fifa.worldq.uefa": 2.4,   # Repechaje: Mucha tensión, suelen ser de pocos goles (Under 2.5)
+    "fifa.wcq.ply": 2.3,       # Play-offs Intercontinentales: Máxima tensión, promedio muy bajo
     "default": 2.5
 }
 
