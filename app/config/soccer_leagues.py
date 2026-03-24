@@ -15,8 +15,6 @@ SOCCER_SUPPORTED_LEAGUES = {
     "ned.1": "Eredivisie",
     "por.1": "Primeira Liga",
     "sco.1": "Scottish Premiership",
-    "bra.1": "Brasileirão",
     "conmebol.libertadores": "Copa Libertadores",
     "fifa.friendly": "Amistosos Internacionales",
-    "arg.1":"Liga Argentina", 
 }
