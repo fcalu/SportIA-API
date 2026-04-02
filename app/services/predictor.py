@@ -413,25 +413,28 @@ async def ai_predict(req):
             enriched_props, odds
         )
 
+        top_decisions_for_ai = tipster_decisions[:3]
         # ======================================================
         # 🧠 LLM
         # ======================================================
-        if sport == "football":
-            final_prompt = nfl_prompt(match, odds, tipster_decisions)
-        elif sport == "basketball":
-            final_prompt = nba_prompt(match, odds, tipster_decisions)
-        else:
-            final_prompt = soccer_prompt(
-            match,
-            odds,
-            tipster_decisions,
-            {
-                "xg": xg,
-                "markets": enriched_props
-            }
-        )
+        try:
+            if sport == "football":
+                final_prompt = nfl_prompt(match, odds, top_decisions_for_ai)
+            elif sport == "basketball":
+                final_prompt = nba_prompt(match, odds, top_decisions_for_ai)
+            else:
+                final_prompt = soccer_prompt(
+                    match, 
+                    odds, 
+                    top_decisions_for_ai, 
+                    {"xg": xg, "markets": enriched_props}
+                )
 
-        analysis = run_llm(final_prompt)
+            analysis = run_llm(final_prompt)
+        except Exception as e:
+            print(f"⚠️ Error OpenAI (Saldo/Cuota): {e}")
+            # Esto evita que el bot se detenga si falla el saldo
+            analysis = "Análisis no disponible por límite de cuota. Revisa los datos de ventaja arriba."
 
         # ======================================================
         # 📊 PERFORMANCE REAL
