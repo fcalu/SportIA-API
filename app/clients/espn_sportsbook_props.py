@@ -3,81 +3,93 @@ import asyncio
 
 BASE_CORE = "https://sports.core.api.espn.com/v2/sports"
 
-NFL_MARKETS = ["Passing Yards", "Passing Touchdowns", "Rushing Yards", "Receiving Yards", "Receptions"]
-# He ajustado estos para que hagan match exacto con el JSON de ESPN
-NBA_MARKETS = ["Points", "Rebounds", "Assists", "Three Point Field Goals Made", "Total Points", "Total Rebounds", "Total Assists"]
+# Mercados normalizados para NBA y NFL
+NBA_MARKETS_MAP = {
+    "points": "Points",
+    "rebounds": "Rebounds",
+    "assists": "Assists",
+    "three point field goals made": "Three_Pointers_Made",
+    "3-pointers made": "Three_Pointers_Made"
+}
 
 async def fetch_json(url):
     async with httpx.AsyncClient(timeout=10) as client:
         try:
             r = await client.get(url)
-            r.raise_for_status()
-            return r.json()
-        except:
+            if r.status_code == 200:
+                return r.json()
+            return {}
+        except Exception as e:
+            print(f"⚠️ Error fetching ESPN data: {e}")
             return {}
 
 async def get_sportsbook_player_props(sport, league, event_id):
     """
-    Trae los props de DraftKings (Provider 100) y los formatea para el Predictor
+    Trae los props de DraftKings (Provider 100) desde el endpoint propBets de ESPN Core v2.
     """
-    # URL que descubrimos en el JSON anterior
     props_url = (
         f"{BASE_CORE}/{sport}/leagues/{league}/events/{event_id}"
-        f"/competitions/{event_id}/odds/100/propBets?limit=100"
+        f"/competitions/{event_id}/odds/100/propBets?limit=150"
     )
 
     data = await fetch_json(props_url)
     results = []
-    
-    # Extraemos los items de la respuesta
     items = data.get("items", [])
     
-    # Para no saturar con peticiones a la API de atletas, intentaremos extraer 
-    # la info básica y solo pediremos el nombre si es estrictamente necesario.
-    for item in items:
-        # 1. Identificar el tipo de apuesta
-        # ESPN a veces lo manda en item['type']['name'] o item['displayValue']
-        raw_prop_type = item.get("displayValue") or item.get("type", {}).get("name", "")
-        
-        # Normalización rápida para el Predictor
-        prop_type = "Points" if "Points" in raw_prop_type else \
-                    "Rebounds" if "Rebounds" in raw_prop_type else \
-                    "Assists" if "Assists" in raw_prop_type else \
-                    "Three_Pointers_Made" if "Three Point" in raw_prop_type or "3-Pointers" in raw_prop_type else \
-                    raw_prop_type
+    if not items:
+        print(f"⚠️ No se encontraron propBets para el evento {event_id}")
 
-        # 2. Filtrar por deporte
-        if sport == "basketball" and not any(m in raw_prop_type for m in ["Points", "Rebounds", "Assists", "Three Point"]):
+    for item in items:
+        # 1. Identificar el tipo de apuesta y normalizarlo
+        display_name = item.get("displayValue", "").lower()
+        
+        prop_type = None
+        for key, value in NBA_MARKETS_MAP.items():
+            if key in display_name:
+                prop_type = value
+                break
+        
+        if not prop_type:
             continue
 
-        # 3. Obtener el Atleta (Usamos una técnica rápida para el nombre)
+        # 2. Obtener el Atleta
         athlete_ref = item.get("athlete", {}).get("$ref", "")
         if not athlete_ref:
             continue
         
-        # Obtenemos info del atleta
+        # Obtenemos nombre del atleta (puedes cachear esto en el futuro para más velocidad)
         athlete_data = await fetch_json(athlete_ref)
-        name = athlete_data.get("displayName", "Unknown Player")
+        player_name = athlete_data.get("displayName")
+        
+        if not player_name:
+            continue
 
-        # 4. Obtener la Línea (Target Value)
-        # En el JSON de la v2 suele estar en item['value']
+        # 3. Obtener la Línea (Target Value)
+        # En el JSON de ESPN v2, a veces viene como 'value' directo en el item
         line = item.get("value")
         
-        # 5. Obtener Momios (Odds)
-        # Buscamos en las elecciones (choices) del Over/Under
+        # 4. Extraer Momios de los Choices
         over_odds = -110
         under_odds = -110
         
         choices = item.get("choices", [])
         for choice in choices:
-            if choice.get("shortDisplayValue") == "O":
-                over_odds = choice.get("odds", {}).get("american", -110)
-            elif choice.get("shortDisplayValue") == "U":
-                under_odds = choice.get("odds", {}).get("american", -110)
+            # Buscamos 'Over' o 'Under' en el texto o abreviatura
+            choice_text = choice.get("text", "").lower()
+            choice_short = choice.get("shortDisplayValue", "").upper()
+            
+            american_odds = choice.get("odds", {}).get("american", -110)
+            
+            if choice_short == "O" or "over" in choice_text:
+                over_odds = american_odds
+                # Si la línea no estaba en el nivel superior, a veces está aquí
+                if line is None: line = choice.get("value")
+            elif choice_short == "U" or "under" in choice_text:
+                under_odds = american_odds
 
         if line is not None:
             results.append({
-                "name": name,
+                "name": player_name,
                 "type": prop_type,
                 "line": float(line),
                 "over_odds": int(over_odds),
@@ -85,4 +97,5 @@ async def get_sportsbook_player_props(sport, league, event_id):
                 "source": "DraftKings"
             })
 
+    print(f"✅ Se capturaron {len(results)} líneas reales de DraftKings")
     return results
