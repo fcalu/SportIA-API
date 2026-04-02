@@ -152,6 +152,9 @@ async def ai_predict(req):
         # ======================================================
         # 🏀 NBA
         # ======================================================
+        # ======================================================
+        # 🏀 NBA (CONECTADO AL NUEVO BUILDER MULTI-MERCADO)
+        # ======================================================
         elif sport == "basketball":
 
             home_id, away_id = await get_event_teams(
@@ -169,6 +172,7 @@ async def ai_predict(req):
 
             debug("NBA_STATUSES", statuses)
 
+            # El builder ahora genera Points, Rebounds, Assists y 3PT
             raw_props = build_nba_props_from_roster(
                 players, statuses, odds
             )
@@ -176,7 +180,6 @@ async def ai_predict(req):
             filtered_props = []
 
             for prop in raw_props:
-
                 normalize_prop(prop)
 
                 if prop.get("player_id"):
@@ -190,18 +193,22 @@ async def ai_predict(req):
 
                 prop["injury_status"] = status
 
+                # Filtramos solo bajas definitivas
                 if status in ["out", "doubtful"]:
                     continue
 
-                prop["reliability_factor"] = 0.4 if status == "questionable" else 0.6
+                # Ajuste de confiabilidad según el builder
+                prop["reliability_factor"] = 0.4 if status == "questionable" else 0.7
 
+                # Obtenemos la proyección final del WSPM Engine
                 projection = wspm_nba_projection(
                     prop, odds, script
                 )
 
                 minutes_proj = projection.get("projected_minutes", 0)
 
-                if minutes_proj < 20:
+                # Filtro de minutos: Bajamos a 12 para captar especialistas en 3PT
+                if minutes_proj < 12:
                     continue
 
                 prop["projection_model"] = projection
@@ -211,15 +218,12 @@ async def ai_predict(req):
                 if mean <= 0:
                     continue
 
-                if prop["type"] == "Points":
-                    prop["line"] = round(mean * 0.98)
-                elif prop["type"] == "Rebounds":
-                    prop["line"] = round(mean * 0.95)
-                elif prop["type"] == "Assists":
-                    prop["line"] = round(mean * 0.93)
-                else:
-                    prop["line"] = round(mean * 0.97)
-
+                # ASIGNACIÓN DE LÍNEA BASE PARA COMPARACIÓN
+                # Ya no multiplicamos por 0.98, dejamos la media pura para que 
+                # el Trading Engine calcule el Edge Real contra la línea del libro.
+                prop["line"] = round(mean, 1)
+                
+                # Cuotas base si no hay sportsbook data disponible
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
 

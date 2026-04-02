@@ -32,45 +32,52 @@ def implied_probability(odds):
 # 🏀 NBA PROJECTION ENGINE
 # ==========================================================
 def wspm_nba_projection(prop, odds, script):
-
+    # Extraemos valores base
     mean = prop["projection_model"]["mean"]
     std_dev = prop["projection_model"]["std_dev"]
     minutes = prop.get("projected_minutes", 30)
+    prop_type = prop.get("type", "").lower() # Importante: detectar el mercado
 
     spread = abs(float(odds.get("spread", 0))) if odds else 0
 
-    # Blowout adjustment
+    # ==========================================================
+    # 🏀 AJUSTE POR BLOWOUT (Saturación de minutos)
+    # ==========================================================
     if spread >= 15:
-
         if 15 <= spread < 20:
-            primary_cut = 0.15
-            bench_boost = 0.08
-            variance_boost = 0.15
+            primary_cut, bench_boost, variance_boost = 0.15, 0.08, 0.15
         else:
-            primary_cut = 0.22
-            bench_boost = 0.12
-            variance_boost = 0.22
+            primary_cut, bench_boost, variance_boost = 0.22, 0.12, 0.22
 
         if prop.get("role") == "Primary":
             mean *= (1 - primary_cut)
             minutes *= (1 - primary_cut)
         else:
+            # Los suplentes suben mucho en Puntos/3PT en minutos basura
             mean *= (1 + bench_boost)
             minutes *= (1 + bench_boost)
-
+        
         std_dev *= (1 + variance_boost)
 
+    # ==========================================================
+    # 🎯 AJUSTE ESPECÍFICO POR MERCADO (Edge Fino)
+    # ==========================================================
+    # High Scoring beneficia más a Puntos/Asistencias que a Rebotes
     if script == "high_scoring":
-        mean *= 1.03
+        if "points" in prop_type: mean *= 1.05
+        elif "assists" in prop_type: mean *= 1.04
+        elif "rebounds" in prop_type: mean *= 1.02
+        else: mean *= 1.03
     elif script == "defensive":
-        mean *= 0.97
+        if "points" in prop_type: mean *= 0.94
+        elif "three" in prop_type: mean *= 0.92 # Los triples sufren más en defensas cerradas
+        else: mean *= 0.97
 
     return {
         "mean": round(mean, 2),
         "std_dev": round(std_dev, 2),
         "projected_minutes": round(minutes, 2)
     }
-
 
 # ==========================================================
 # 🏈 NFL PROJECTION ENGINE
