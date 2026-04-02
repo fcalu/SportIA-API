@@ -13,11 +13,18 @@ def run_llm(user_prompt: str, system_prompt: str = None):
 
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    else:
-        # Un prompt de sistema más corto ahorra tokens de entrada (dinero)
+   # 🛡️ PROMPT DE HIERRO PARA EVITAR ERRORES DE LÍNEAS
         messages.append({
             "role": "system",
-            "content": "Eres un analista de apuestas técnico y breve. Ve al grano."
+            "content": (
+                "Eres un experto analista de NBA y NFL. Tu prioridad es la PRECISIÓN NUMÉRICA. "
+                "REGLAS DE ORO:\n"
+                "1. NUNCA mezcles la línea (line) de una categoría con otra. Si el mercado es Puntos, usa la línea de puntos.\n"
+                "2. NO inventes picks. Si el JSON dice que la línea es 25.5, no escribas 3.5.\n"
+                "3. Para los 'Player Props Recomendados', usa SIEMPRE este formato: [Jugador] | [Mercado] | [Línea] | [Pronóstico].\n"
+                "4. Si detectas un Edge > 10%, destácalo como 'PICK ÉLITE'.\n"
+                "5. Sé breve, técnico y ultra-preciso."
+            )
         })
 
     messages.append({"role": "user", "content": user_prompt})
