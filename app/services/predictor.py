@@ -137,77 +137,67 @@ async def ai_predict(req):
                 name_lower = prop["name"].lower()
 
                 for book in sportsbook_props:
-                    book_name = book.get("name", "").lower()
+                    # Limpiamos nombres (quitamos puntos y espacios extra)
+                    book_clean = book.get("name", "").lower().replace(".", "").strip()
+                    model_clean = name_lower.replace(".", "").strip()
 
-                    if name_lower in book_name or book_name in name_lower:
+                    # 🛡️ VALIDACIÓN DOBLE: Nombre Y Tipo de Mercado
+                    name_match = (model_clean in book_clean or book_clean in model_clean)
+                    market_match = (prop["type"] == book.get("type"))
+
+                    if name_match and market_match:
                         prop["line"] = safe_float(book.get("line"))
                         prop["over_odds"] = book.get("over_odds", -110)
                         prop["under_odds"] = book.get("under_odds", -110)
+                        # Log para que veas en consola que está funcionando
+                        print(f"🎯 MATCH: {prop['name']} | {prop['type']} | Line: {prop['line']}")
                         break
 
-                prop["projection_model"] = wspm_nfl_projection(
-                    prop, odds, script
-                )
+                # Esto sigue igual para NFL
+                prop["projection_model"] = wspm_nfl_projection(prop, odds, script)
 
-        # ======================================================
-        # 🏀 NBA
-        # ======================================================
-        # ======================================================
-        # 🏀 NBA (CONECTADO AL NUEVO BUILDER MULTI-MERCADO)
+       # ======================================================
+        # 🏀 NBA (CONECTADO AL NUEVO BUILDER Y CUOTAS REALES)
         # ======================================================
         elif sport == "basketball":
 
-            home_id, away_id = await get_event_teams(
-                sport, league, event_id
-            )
+            home_id, away_id = await get_event_teams(sport, league, event_id)
 
             players = (
                 await get_team_roster(home_id)
                 + await get_team_roster(away_id)
             )
 
-            statuses = await get_event_player_status(
-                sport, league, event_id
+            statuses = await get_event_player_status(sport, league, event_id)
+
+            # --- NUEVO: TRAEMOS LAS CUOTAS REALES DE DRAFTKINGS ---
+            sportsbook_props = await get_sportsbook_player_props(
+                sport=sport,
+                league=league,
+                event_id=event_id
             )
 
-            debug("NBA_STATUSES", statuses)
-
-            # El builder ahora genera Points, Rebounds, Assists y 3PT
-            raw_props = build_nba_props_from_roster(
-                players, statuses, odds
-            )
-
+            # El builder genera la base: Points, Rebounds, Assists y 3PT
+            raw_props = build_nba_props_from_roster(players, statuses, odds)
             filtered_props = []
 
             for prop in raw_props:
                 normalize_prop(prop)
 
                 if prop.get("player_id"):
-                    prop["player_image"] = (
-                        f"https://a.espncdn.com/i/headshots/nba/players/full/{prop['player_id']}.png"
-                    )
+                    prop["player_image"] = f"https://a.espncdn.com/i/headshots/nba/players/full/{prop['player_id']}.png"
 
-                status = statuses.get(
-                    prop.get("player_id"), {}
-                ).get("status", "active")
-
+                status = statuses.get(prop.get("player_id"), {}).get("status", "active")
                 prop["injury_status"] = status
 
-                # Filtramos solo bajas definitivas
                 if status in ["out", "doubtful"]:
                     continue
 
-                # Ajuste de confiabilidad según el builder
                 prop["reliability_factor"] = 0.4 if status == "questionable" else 0.7
 
-                # Obtenemos la proyección final del WSPM Engine
-                projection = wspm_nba_projection(
-                    prop, odds, script
-                )
-
+                projection = wspm_nba_projection(prop, odds, script)
                 minutes_proj = projection.get("projected_minutes", 0)
 
-                # Filtro de minutos: Bajamos a 12 para captar especialistas en 3PT
                 if minutes_proj < 12:
                     continue
 
@@ -218,14 +208,26 @@ async def ai_predict(req):
                 if mean <= 0:
                     continue
 
-                # ASIGNACIÓN DE LÍNEA BASE PARA COMPARACIÓN
-                # Ya no multiplicamos por 0.98, dejamos la media pura para que 
-                # el Trading Engine calcule el Edge Real contra la línea del libro.
+                # 1. VALORES POR DEFECTO (Si no hay match con la casa)
                 prop["line"] = round(mean, 1)
-                
-                # Cuotas base si no hay sportsbook data disponible
                 prop["over_odds"] = -110
                 prop["under_odds"] = -110
+
+                # 2. --- LOGICA DE MATCH CON DRAFTKINGS ---
+                # Esto es lo que activa el "Edge" real
+                name_model = prop["name"].lower().replace(".", "").strip()
+                
+                for book in sportsbook_props:
+                    name_book = book.get("name", "").lower().replace(".", "").strip()
+                    
+                    # Comparamos nombre (difuso) Y tipo de mercado
+                    if (name_model in name_book or name_book in name_model) and prop["type"] == book["type"]:
+                        prop["line"] = book["line"]
+                        prop["over_odds"] = book["over_odds"]
+                        prop["under_odds"] = book["under_odds"]
+                        # Debug opcional para ver matches en consola
+                        print(f"🎯 NBA MATCH: {prop['name']} | {prop['type']} | Line: {prop['line']}")
+                        break
 
                 filtered_props.append(prop)
 
