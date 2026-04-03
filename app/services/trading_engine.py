@@ -1,21 +1,22 @@
 from app.services.probability_engine import prob_over, prob_under
 from app.services.market_engine import no_vig_prob
-
+import math
 
 # ==========================================================
 # 🛡️ MODEL SANITY CHECK
 # ==========================================================
 def validate_model_projection(prop):
-
+    # Límites físicos por posición para evitar proyecciones irreales
     position_limits = {
         "QB": {"Carries": 15, "Rushing Yards": 80, "Pass Completions": 45},
         "RB": {"Carries": 35, "Rushing Yards": 220},
         "WR": {"Rushing Yards": 40},
+        "C":  {"Points": 45, "Rebounds": 25}, 
+        "G":  {"Points": 60, "Assists": 20}
     }
 
     role = prop.get("role", "")
     market = prop.get("type", "")
-
     model_data = prop.get("projection_model", {})
 
     # 🛡️ COMPATIBILIDAD FLOAT → DISTRIBUCIÓN
@@ -25,7 +26,8 @@ def validate_model_projection(prop):
         projection = float(model_data)
         prop["projection_model"] = {
             "mean": projection,
-            "std_dev": max(projection * 0.2, 1)
+            # Se aumenta la desviación base a 0.35 para mayor seguridad estadística
+            "std_dev": max(projection * 0.35, 2.5) 
         }
 
     season_avg = float(prop.get("season_avg", projection))
@@ -38,13 +40,14 @@ def validate_model_projection(prop):
         if projection > position_limits[role][market]:
             exceeds_limits = True
 
-    if season_avg > 0 and projection > season_avg * 2.2:
+    # Se endurece el filtro de outliers de 2.2 a 1.6 para evitar picos bruscos
+    if season_avg > 0 and projection > season_avg * 1.6:
         is_outlier = True
 
     if exceeds_limits:
         reliability = 0
     elif is_outlier:
-        reliability = 0.2
+        reliability = 0.15 # Penalización mayor por ser outlier
     elif confidence >= 70:
         reliability = 1.0
     elif confidence >= 50:
@@ -66,11 +69,10 @@ def validate_model_projection(prop):
 # 📊 EDGE MATEMÁTICO REAL
 # ==========================================================
 def calculate_betting_edge(prop):
-    
     market_type = prop.get("type")
 
     # ======================================================
-    # ⚽ MONEYLINE 1X2
+    # ⚽ MONEYLINE 1X2 / DOUBLE CHANCE
     # ======================================================
     if market_type in [
         "moneyline_home",
@@ -79,7 +81,6 @@ def calculate_betting_edge(prop):
         "double_chance_home",
         "double_chance_away"
     ]:
-
         model_prob = prop.get("model_prob")
         market_prob = prop.get("market_implied_prob")
 
@@ -89,25 +90,21 @@ def calculate_betting_edge(prop):
             return prop
 
         edge = model_prob - market_prob
-
         prop["market_prob"] = market_prob
         prop["edge"] = round(edge, 4)
 
-        # Compatibilidad con sistema existente
         prop["model_prob_over"] = model_prob
         prop["model_prob_under"] = 1 - model_prob
         prop["market_prob_over"] = market_prob
         prop["market_prob_under"] = 1 - market_prob
         prop["edge_over"] = round(edge, 4)
         prop["edge_under"] = round(-edge, 4)
-
         return prop
 
     # ======================================================
-    # ⚽ TOTALS & BTTS
+    # ⚽ TOTALS & BTTS (SOCCER)
     # ======================================================
     if market_type in ["total_goals", "btts"]:
-
         if market_type == "btts":
             model_over = prop.get("model_prob_yes")
             model_under = prop.get("model_prob_no")
@@ -119,29 +116,24 @@ def calculate_betting_edge(prop):
     # 🏀🏈 NORMAL DISTRIBUTION (NBA / NFL)
     # ======================================================
     else:
-
         model_data = prop.get("projection_model", {})
 
         if isinstance(model_data, dict):
             mean = float(model_data.get("mean", 0))
-            std = float(model_data.get("std_dev", 1))
+            # Suavizado: Se incrementa std_dev del 0.2 al 0.38 para evitar Edges artificiales
+            std = float(model_data.get("std_dev", mean * 0.38))
         else:
             mean = float(model_data)
-            std = max(mean * 0.2, 1)
-            prop["projection_model"] = {
-                "mean": mean,
-                "std_dev": std
-            }
+            std = max(mean * 0.38, 3.0)
+            prop["projection_model"] = {"mean": mean, "std_dev": std}
 
         line = float(prop.get("line", 0))
-
         model_over = prob_over(line, mean, std)
         model_under = prob_under(line, mean, std)
 
     # ======================================================
-    # 💰 MARKET PROBABILITIES (OVER/UNDER TYPE)
+    # 💰 MARKET PROBABILITIES (NO-VIG)
     # ======================================================
-
     over_odds = prop.get("over_odds")
     under_odds = prop.get("under_odds")
 
@@ -166,15 +158,11 @@ def calculate_betting_edge(prop):
 
     return prop
 
+
 # ==========================================================
 # 📉 MARKET EFFICIENCY FILTER
 # ==========================================================
 def market_efficiency_filter(prop, threshold=0.03):
-    """
-    Si el modelo y el mercado están demasiado alineados,
-    se considera mercado eficiente → no bet.
-    """
-
     market_prob = prop.get("market_prob_over")
     model_prob = prop.get("model_prob_over")
 
@@ -192,15 +180,20 @@ def market_efficiency_filter(prop, threshold=0.03):
 
     return prop
 
+
 # ==========================================================
-# 🧠 EDGE AJUSTADO POR FIABILIDAD
+# 🧠 EDGE AJUSTADO POR FIABILIDAD Y CAP (TECHO)
 # ==========================================================
 def apply_validated_edge(prop):
-
     reliability = prop.get("reliability_factor", 1)
 
-    prop["edge_over"] = round(prop.get("edge_over", 0) * reliability, 4)
-    prop["edge_under"] = round(prop.get("edge_under", 0) * reliability, 4)
+    edge_over = prop.get("edge_over", 0) * reliability
+    edge_under = prop.get("edge_under", 0) * reliability
+
+    # 🚨 CAP DE SEGURIDAD: Ningún Edge puede superar el 22% 
+    # para evitar errores de proyección o noticias no detectadas.
+    prop["edge_over"] = round(min(edge_over, 0.22), 4)
+    prop["edge_under"] = round(min(edge_under, 0.22), 4)
 
     return prop
 
@@ -209,7 +202,6 @@ def apply_validated_edge(prop):
 # 🎯 DECISION LAYER
 # ==========================================================
 def classify_bet(prop):
-    
     validation = prop.get("model_validation", {})
     confidence = prop.get("confidence", 50)
 
@@ -220,7 +212,6 @@ def classify_bet(prop):
 
     # Para moneyline y double chance
     edge_simple = prop.get("edge")
-
     if edge_simple is not None:
         if edge_simple > 0.08 and confidence >= 70:
             prop["bet_tier"] = "STRONG_VALUE"
@@ -256,4 +247,4 @@ def classify_bet(prop):
     prop["bet_tier"] = tier
     prop["bet_decision"] = decision
 
-    return prop 
+    return prop
