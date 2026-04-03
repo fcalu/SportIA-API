@@ -14,7 +14,7 @@ SOCCER_SUPPORTED_LEAGUES = {
     "mex.1": "Liga MX",
     "ned.1": "Eredivisie",
     "por.1": "Primeira Liga",
-    "sco.1": "Scottish Premiership",
+    "ksa.1": "Saudi Pro League",
     "conmebol.libertadores": "Copa Libertadores",
     "fifa.friendly": "Amistosos Internacionales",
     "fifa.worldq.uefa":"Uefa Repechage", 

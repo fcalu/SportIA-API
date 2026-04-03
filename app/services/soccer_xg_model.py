@@ -14,15 +14,30 @@ def safe_float(v, default=0):
 # =========================================
 
 LEAGUE_BASELINES = {
+    # --- Ligas Nacionales ---
     "mex.1": 2.6,
     "fra.1": 2.5,
     "eng.1": 2.8,
+    "eng.2": 2.6,           # Championship: Muy física, promedio sólido
     "esp.1": 2.6,
-    "ned.1": 3.0,   # Eredivisie más goleadora
-    "usa.1": 2.8,   # MLS
-    "fifa.friendly": 2.7,      # Amistosos: Suelen ser abiertos, más goles (Promedio ~2.65 - 2.8)
-    "fifa.worldq.uefa": 2.4,   # Repechaje: Mucha tensión, suelen ser de pocos goles (Under 2.5)
-    "fifa.wcq.ply": 2.3,       # Play-offs Intercontinentales: Máxima tensión, promedio muy bajo
+    "ger.1": 3.1,           # Bundesliga: Históricamente la más goleadora de las "Top 5"
+    "ita.1": 2.6,           # Serie A: Ha subido su promedio, ya no es tan defensiva
+    "usa.1": 2.8,           # MLS: Estilo abierto y ofensivo
+    "ned.1": 3.0,           # Eredivisie: Alta producción de goles
+    "por.1": 2.5,           # Primeira Liga: Marcada disparidad entre grandes y chicos
+    "ksa.1": 2.7,           # Saudi Pro League: Con los nuevos refuerzos es más ofensiva (Ajustado)
+    
+    # --- Torneos Continentales (Suelen ser más cerrados en fases finales) ---
+    "uefa.champions": 2.9,     # Máximo nivel, mucha eficiencia ofensiva
+    "uefa.europa": 2.7,
+    "uefa.europa.conf": 2.6,
+    "conmebol.libertadores": 2.4, # Libertadores: Partidos muy trabados y locales fuertes
+    
+    # --- Torneos FIFA / Selecciones ---
+    "fifa.friendly": 2.7,
+    "fifa.wcq.ply": 2.2,       # Máxima tensión: El miedo a perder baja el promedio
+    
+    # --- Configuración Base ---
     "default": 2.5
 }
 
