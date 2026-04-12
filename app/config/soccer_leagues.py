@@ -20,4 +20,6 @@ SOCCER_SUPPORTED_LEAGUES = {
     "fifa.worldq.uefa":"Uefa Repechage", 
     "arg.1":"Liga Argentina", 
     "conmebol.sudamericana": "Copa Sudamericana",
+    "bra.1":"Brasileirao", 
+    "nor.1": "Eliteserien",
 }

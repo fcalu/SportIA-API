@@ -28,6 +28,8 @@ LEAGUE_BASELINES = {
     "ksa.1": 2.7,           # Saudi Pro League: Con los nuevos refuerzos es más ofensiva (Ajustado)
     "arg.1": 2.3,
     "conmebol.sudamericana": 2.4,
+    "bra.1": 2.5,
+    "nor.1": 2.9,
     # --- Torneos Continentales (Suelen ser más cerrados en fases finales) ---
     "uefa.champions": 2.9,     # Máximo nivel, mucha eficiencia ofensiva
     "uefa.europa": 2.7,
