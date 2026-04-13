@@ -18,8 +18,8 @@ SOCCER_SUPPORTED_LEAGUES = {
     "conmebol.libertadores": "Copa Libertadores",
     "fifa.friendly": "Amistosos Internacionales",
     "fifa.worldq.uefa":"Uefa Repechage", 
-    "arg.1":"Liga Argentina", 
+    "swe.1":"Allsvenskan",
     "conmebol.sudamericana": "Copa Sudamericana",
-    "bra.1":"Brasileirao", 
+    
     "nor.1": "Eliteserien",
 }

@@ -26,7 +26,7 @@ LEAGUE_BASELINES = {
     "ned.1": 3.0,           # Eredivisie: Alta producción de goles
     "por.1": 2.5,           # Primeira Liga: Marcada disparidad entre grandes y chicos
     "ksa.1": 2.7,           # Saudi Pro League: Con los nuevos refuerzos es más ofensiva (Ajustado)
-    "arg.1": 2.3,
+    "swe.1": 2.9,
     "conmebol.sudamericana": 2.4,
     "bra.1": 2.5,
     "nor.1": 2.9,
