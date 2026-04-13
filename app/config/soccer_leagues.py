@@ -12,6 +12,7 @@ SOCCER_SUPPORTED_LEAGUES = {
     "uefa.europa.conf": "Europa Conference League",
     "fifa.world": "World Cup",
     "mex.1": "Liga MX",
+    "bra.1": "Brasileirao",
     "ned.1": "Eredivisie",
     "por.1": "Primeira Liga",
     "ksa.1": "Saudi Pro League",
