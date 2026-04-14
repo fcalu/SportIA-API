@@ -128,21 +128,81 @@ def soccer_projection_engine(home_xg, away_xg, goal_line=2.5):
 # 🧪 EJEMPLO DE USO
 # ==========================================================
 if __name__ == "__main__":
-
+    
     # Ejemplo realista
-    home_xg = 1.65
-    away_xg = 1.10
+    home_xg = 2.13
+    away_xg = 0.97
 
     markets = soccer_projection_engine(home_xg, away_xg, goal_line=2.5)
 
     print("📊 PROBABILIDADES DERIVADAS\n")
+
     for k, v in markets.items():
         print(f"{k}: {v}")
 
-    # Ejemplo EV
-    decimal_odds = 1.95
-    prob = markets["over"]
+    # ======================================================
+    # 🔥 BTTS DEBUG + ODDS DERIVADAS
+    # ======================================================
 
-    ev = expected_value(prob, decimal_odds)
+    btts_yes_prob = markets["btts_yes"]
+    btts_no_prob = markets["btts_no"]
 
-    print("\n💰 Expected Value Over 2.5 @1.95:", ev)
+    print("\n⚽ BTTS PROBABILITIES")
+    print(f"BTTS YES: {btts_yes_prob}")
+    print(f"BTTS NO:  {btts_no_prob}")
+
+    # ======================================================
+    # 💰 CONVERTIR A ODDS (DECIMAL + AMERICAN)
+    # ======================================================
+
+    def prob_to_decimal(prob):
+        if prob <= 0:
+            return None
+        return round(1 / prob, 2)
+
+    def decimal_to_american(decimal_odds):
+        if decimal_odds is None:
+            return None
+        if decimal_odds >= 2:
+            return round((decimal_odds - 1) * 100)
+        else:
+            return round(-100 / (decimal_odds - 1))
+
+    # Decimal odds
+    btts_yes_decimal = prob_to_decimal(btts_yes_prob)
+    btts_no_decimal = prob_to_decimal(btts_no_prob)
+
+    # American odds
+    btts_yes_american = decimal_to_american(btts_yes_decimal)
+    btts_no_american = decimal_to_american(btts_no_decimal)
+
+    print("\n💰 BTTS ODDS DERIVADAS")
+    print(f"YES → Decimal: {btts_yes_decimal} | American: {btts_yes_american}")
+    print(f"NO  → Decimal: {btts_no_decimal}  | American: {btts_no_american}")
+
+    # ======================================================
+    # 💡 COMPARACIÓN CON MERCADO (SIMULADO)
+    # ======================================================
+
+    market_yes_odds = 105  # ejemplo DraftKings
+    market_no_odds = -165
+
+    from app.services.wspm_engine import implied_probability
+
+    market_yes_prob = implied_probability(market_yes_odds)
+    market_no_prob = implied_probability(market_no_odds)
+
+    print("\n📊 MERCADO (IMPLIED)")
+    print(f"YES → {round(market_yes_prob, 4)}")
+    print(f"NO  → {round(market_no_prob, 4)}")
+
+    # ======================================================
+    # 🚀 EDGE
+    # ======================================================
+
+    edge_yes = btts_yes_prob - market_yes_prob
+    edge_no = btts_no_prob - market_no_prob
+
+    print("\n🔥 EDGE CALCULADO")
+    print(f"YES EDGE: {round(edge_yes, 4)}")
+    print(f"NO EDGE:  {round(edge_no, 4)}")
