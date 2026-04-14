@@ -9,6 +9,7 @@ from app.clients.espn_nba_roster import get_team_roster
 from app.clients.espn_player_gamelog import get_player_game_log
 from app.services.player_form_engine import analyze_player_form
 from app.services.wspm_engine import implied_probability
+from app.services.soccer_market_enhancer import enhance_soccer_markets
 from datetime import datetime, timezone
 from app.services.model_tracking import (
     save_prediction,
@@ -261,7 +262,13 @@ async def ai_predict(req):
             markets = derive_markets(
                 matrix, total_line
             )
-
+            # 🔥 ENHANCE MARKETS (NUEVA CAPA)
+            markets = enhance_soccer_markets(
+                markets=markets,
+                odds=odds,
+                home_stats=home_stats,
+                away_stats=away_stats
+            )
             player_props = []
 
             # ======================================================
@@ -281,19 +288,28 @@ async def ai_predict(req):
                 "is_active": True
             })
 
-            # ======================================================
+          # ======================================================
             # 🎯 BOTH TEAMS TO SCORE
             # ======================================================
+
+            # 🔧 proxy BTTS usando OU (temporal)
+            over_odds = odds.get("over_odds")
+            under_odds = odds.get("under_odds")
+
+            btts_yes_odds = over_odds if over_odds else -110
+            btts_no_odds = under_odds if under_odds else -110
 
             player_props.append({
                 "name": "Both Teams To Score",
                 "role": "team",
                 "type": "btts",
-                "model_prob_yes": markets["btts_yes"],
-                "model_prob_no": markets["btts_no"],
+                "line": 0.5,  # dummy para engine
+                "model_prob_over": markets["btts_yes"],
+                "model_prob_under": markets["btts_no"],
+                "over_odds": btts_yes_odds,
+                "under_odds": btts_no_odds,
                 "is_active": True
             })
-
             # ======================================================
             # 🎯 1X2 CON HOLD NORMALIZADO
             # ======================================================
