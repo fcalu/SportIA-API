@@ -262,6 +262,26 @@ async def ai_predict(req):
             markets = derive_markets(
                 matrix, total_line
             )
+            # ======================================================
+            # 🔥 FIX BTTS DESDE POISSON (CRÍTICO)
+            # ======================================================
+
+            if "btts_yes" not in markets or markets["btts_yes"] is None:
+
+                import math
+
+                home_xg = xg["home_xg"]
+                away_xg = xg["away_xg"]
+
+                prob_home_scores = 1 - math.exp(-home_xg)
+                prob_away_scores = 1 - math.exp(-away_xg)
+
+                btts_yes = prob_home_scores * prob_away_scores
+
+                markets["btts_yes"] = btts_yes
+                markets["btts_no"] = 1 - btts_yes
+
+                print("✅ BTTS generado desde xG:", btts_yes)
             # 🔥 ENHANCE MARKETS (NUEVA CAPA)
             markets = enhance_soccer_markets(
                 markets=markets,
