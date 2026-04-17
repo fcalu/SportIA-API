@@ -21,6 +21,9 @@ SOCCER_SUPPORTED_LEAGUES = {
     "fifa.worldq.uefa":"Uefa Repechage", 
     "swe.1":"Allsvenskan",
     "conmebol.sudamericana": "Copa Sudamericana",
-    
+    "aut.1": "Austrian Bundesliga",
+    "bel.1": "Jupiler Pro League",
+    "sui.1": "Swiss Super League",
+    "jpn.1": "J1 League",
     "nor.1": "Eliteserien",
 }
