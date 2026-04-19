@@ -64,7 +64,30 @@ def safe_float(v, default=None):
         return float(v)
     except:
         return default
+    
+def translate_espn_soccer_odds(espn_json):
+    """
+    Traduce el JSON complejo de ESPN al formato simple de Sportia.
+    """
+    try:
+        if not espn_json or "items" not in espn_json or not espn_json["items"]:
+            return None
 
+        # Tomamos el primer proveedor (DraftKings por ID 100 o prioridad)
+        item = espn_json["items"][0]
+        curr = item.get("current", {})
+
+        return {
+            "over_under": safe_float(item.get("overUnder")),
+            "over_odds": safe_float(curr.get("over", {}).get("american")),
+            "under_odds": safe_float(curr.get("under", {}).get("american")),
+            "home_ml": safe_float(item.get("homeTeamOdds", {}).get("moneyLine")),
+            "away_ml": safe_float(item.get("awayTeamOdds", {}).get("moneyLine")),
+            "draw_ml": safe_float(curr.get("draw", {}).get("american")),
+        }
+    except Exception as e:
+        print(f"⚠️ Error en traducción de Odds: {e}")
+        return None
 
 def normalize_prop(prop):
     prop["name"] = (
@@ -235,13 +258,17 @@ async def ai_predict(req):
             player_props = filtered_props
 
         # ======================================================
-        # ⚽ SOCCER
+        # ⚽ SOCCER (FULL ENGINE WITH REAL ODDS CROSS-CHECK)
         # ======================================================
         elif sport == "soccer":
     
             home_id, away_id = await get_event_teams(
                 sport, league, event_id
             )
+
+            # 🟢 [NUEVO] Paso 1: Traducir las odds de ESPN al formato Sportia
+            # 'odds' es el objeto que viene del request original o get_event_odds
+            espn_data = translate_espn_soccer_odds(odds)
 
             home_stats = await get_team_stats(league, home_id)
             away_stats = await get_team_stats(league, away_id)
@@ -250,9 +277,8 @@ async def ai_predict(req):
                 home_stats, away_stats, league
             )
 
-            total_line = safe_float(
-                odds.get("over_under"), 2.5
-            )
+            # 🟢 [NUEVO] Paso 2: Usar la línea real de ESPN (ej. 2.5) para el cálculo
+            total_line = espn_data["over_under"] if espn_data else safe_float(odds.get("over_under"), 2.5)
 
             matrix = build_score_matrix(
                 xg["home_xg"],
@@ -262,14 +288,12 @@ async def ai_predict(req):
             markets = derive_markets(
                 matrix, total_line
             )
+
             # ======================================================
             # 🔥 FIX BTTS DESDE POISSON (CRÍTICO)
             # ======================================================
-
             if "btts_yes" not in markets or markets["btts_yes"] is None:
-
                 import math
-
                 home_xg = xg["home_xg"]
                 away_xg = xg["away_xg"]
 
@@ -281,7 +305,6 @@ async def ai_predict(req):
                 markets["btts_yes"] = btts_yes
                 markets["btts_no"] = 1 - btts_yes
 
-                print("✅ BTTS generado desde xG:", btts_yes)
             # 🔥 ENHANCE MARKETS (NUEVA CAPA)
             markets = enhance_soccer_markets(
                 markets=markets,
@@ -289,12 +312,12 @@ async def ai_predict(req):
                 home_stats=home_stats,
                 away_stats=away_stats
             )
+            
             player_props = []
 
             # ======================================================
-            # 🎯 TOTAL GOALS
+            # 🎯 TOTAL GOALS (CRUCE CON ODDS REALES)
             # ======================================================
-
             player_props.append({
                 "name": "Match Total Goals",
                 "role": "team",
@@ -303,48 +326,41 @@ async def ai_predict(req):
                 "projection_model": xg,
                 "model_prob_over": markets["over"],
                 "model_prob_under": markets["under"],
-                "over_odds": odds.get("over_odds"),
-                "under_odds": odds.get("under_odds"),
+                # Inyectamos cuotas reales para que el Trading Engine calcule el Edge
+                "over_odds": espn_data["over_odds"] if espn_data else odds.get("over_odds"),
+                "under_odds": espn_data["under_odds"] if espn_data else odds.get("under_odds"),
                 "is_active": True
             })
 
-          # ======================================================
-            # 🎯 BOTH TEAMS TO SCORE
             # ======================================================
-
-            # 🔧 proxy BTTS usando OU (temporal)
-            over_odds = odds.get("over_odds")
-            under_odds = odds.get("under_odds")
-
-            btts_yes_odds = over_odds if over_odds else -110
-            btts_no_odds = under_odds if under_odds else -110
-
+            # 🎯 BOTH TEAMS TO SCORE (PROXIES Y MODELO)
+            # ======================================================
+            # Nota: ESPN rara vez trae el BTTS en el JSON principal, usamos el modelo Poisson
             player_props.append({
                 "name": "Both Teams To Score",
                 "role": "team",
                 "type": "btts",
-                "line": 0.5,  # dummy para engine
+                "line": 0.5,
                 "model_prob_over": markets["btts_yes"],
                 "model_prob_under": markets["btts_no"],
-                "over_odds": btts_yes_odds,
-                "under_odds": btts_no_odds,
+                "over_odds": odds.get("over_odds"), # Proxy temporal
+                "under_odds": odds.get("under_odds"), # Proxy temporal
                 "is_active": True
             })
+
             # ======================================================
-            # 🎯 1X2 CON HOLD NORMALIZADO
+            # 🎯 1X2 CON HOLD NORMALIZADO Y CRUCE DE EDGE
             # ======================================================
+            # 🟢 Usamos los datos reales del Moneyline de ESPN (Home, Draw, Away)
+            h_ml = espn_data["home_ml"] if espn_data else odds.get("home_moneyline")
+            a_ml = espn_data["away_ml"] if espn_data else odds.get("away_moneyline")
+            d_ml = espn_data["draw_ml"] if espn_data else odds.get("draw_moneyline")
 
-            home_ml = odds.get("home_moneyline")
-            away_ml = odds.get("away_moneyline")
-            draw_ml = odds.get("draw_moneyline")  # si no existe será None
+            home_raw = implied_probability(h_ml)
+            away_raw = implied_probability(a_ml)
+            draw_raw = implied_probability(d_ml) if d_ml else None
 
-            home_raw = implied_probability(home_ml)
-            away_raw = implied_probability(away_ml)
-            draw_raw = implied_probability(draw_ml) if draw_ml else None
-
-            home_fair = None
-            away_fair = None
-            draw_fair = None
+            home_fair, away_fair, draw_fair = None, None, None
 
             if home_raw and away_raw and draw_raw:
                 hold = home_raw + away_raw + draw_raw - 1
@@ -353,48 +369,36 @@ async def ai_predict(req):
                     away_fair = away_raw / (1 + hold)
                     draw_fair = draw_raw / (1 + hold)
 
-            player_props.append({
-                "name": "Full Time Result - Home",
-                "role": "team",
-                "type": "moneyline_home",
-                "model_prob": markets["home_win"],
-                "market_implied_prob": home_fair,
-                "is_active": True
-            })
+            # Inyectamos en props para que Trading Engine detecte la ventaja
+            ml_configs = [
+                ("Home", "moneyline_home", markets["home_win"], home_fair, h_ml),
+                ("Draw", "moneyline_draw", markets["draw"], draw_fair, d_ml),
+                ("Away", "moneyline_away", markets["away_win"], away_fair, a_ml)
+            ]
 
-            player_props.append({
-                "name": "Full Time Result - Draw",
-                "role": "team",
-                "type": "moneyline_draw",
-                "model_prob": markets["draw"],
-                "market_implied_prob": draw_fair,
-                "is_active": True
-            })
-
-            player_props.append({
-                "name": "Full Time Result - Away",
-                "role": "team",
-                "type": "moneyline_away",
-                "model_prob": markets["away_win"],
-                "market_implied_prob": away_fair,
-                "is_active": True
-            })
+            for label, m_type, m_prob, m_fair, m_odd in ml_configs:
+                player_props.append({
+                    "name": f"Full Time Result - {label}",
+                    "role": "team",
+                    "type": m_type,
+                    "model_prob": m_prob,
+                    "market_implied_prob": m_fair,
+                    "over_odds": m_odd, # Se mapea a over_odds para que calculate_betting_edge lo procese
+                    "under_odds": 10000, # Valor dummy para evitar sesgo en el cálculo de no-vig
+                    "is_active": True
+                })
 
             # ======================================================
-            # 🎯 DOUBLE CHANCE DERIVADO CORRECTAMENTE
+            # 🎯 DOUBLE CHANCE DERIVADO
             # ======================================================
-
             if home_fair and draw_fair and away_fair:
-
-                dc_home_market = home_fair + draw_fair
-                dc_away_market = away_fair + draw_fair
-
                 player_props.append({
                     "name": "Double Chance - Home or Draw",
                     "role": "team",
                     "type": "double_chance_home",
                     "model_prob": markets["home_win"] + markets["draw"],
-                    "market_implied_prob": dc_home_market,
+                    "market_implied_prob": home_fair + draw_fair,
+                    "over_odds": None, # Se puede derivar cuota si es necesario
                     "is_active": True
                 })
 
@@ -403,15 +407,10 @@ async def ai_predict(req):
                     "role": "team",
                     "type": "double_chance_away",
                     "model_prob": markets["away_win"] + markets["draw"],
-                    "market_implied_prob": dc_away_market,
+                    "market_implied_prob": away_fair + draw_fair,
+                    "over_odds": None,
                     "is_active": True
                 })
-
-        else:
-            return {"ERROR": "Unsupported sport"}
-
-        if not player_props:
-            print("⚠️ NO PLAYER PROPS GENERATED")
 
         # ======================================================
         # 💰 TRADING ENGINE
