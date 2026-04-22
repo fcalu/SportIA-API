@@ -43,6 +43,7 @@ LEAGUE_BASELINES = {
     "bel.1": 2.8,           # Jupiler Pro League: Muy abierta, estable en producción de goles
     "sui.1": 2.9,           # Swiss Super League: Históricamente ofensiva, pocos empates a cero
     "jpn.1": 2.5,           # J1 League: Muy disciplinada y táctica; promedios controlados
+    "chn.1": 2.7,
     # --- Configuración Base ---
     "default": 2.5
 }

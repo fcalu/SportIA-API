@@ -26,4 +26,5 @@ SOCCER_SUPPORTED_LEAGUES = {
     "sui.1": "Swiss Super League",
     "jpn.1": "J1 League",
     "nor.1": "Eliteserien",
+    "chn.1": "Chinese Super League",
 }
