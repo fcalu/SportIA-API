@@ -22,7 +22,7 @@ LEAGUE_BASELINES = {
     "esp.1": 2.6,
     "ger.1": 3.1,           # Bundesliga: Históricamente la más goleadora de las "Top 5"
     "ita.1": 2.6,           # Serie A: Ha subido su promedio, ya no es tan defensiva
-    "usa.1": 2.8,           # MLS: Estilo abierto y ofensivo
+    "usa.1": 2.7,           # MLS: Estilo abierto y ofensivo
     "ned.1": 3.0,           # Eredivisie: Alta producción de goles
     "por.1": 2.5,           # Primeira Liga: Marcada disparidad entre grandes y chicos
     "ksa.1": 2.7,           # Saudi Pro League: Con los nuevos refuerzos es más ofensiva (Ajustado)
