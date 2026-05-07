@@ -43,14 +43,14 @@ LEAGUE_BASELINES = {
     "bel.1": 2.8,           # Jupiler Pro League: Muy abierta, estable en producción de goles
     "sui.1": 2.9,           # Swiss Super League: Históricamente ofensiva, pocos empates a cero
     "jpn.1": 2.5,           # J1 League: Muy disciplinada y táctica; promedios controlados
-    "chn.1": 2.7,
+    "chn.1": 2.95,
     # --- Configuración Base ---
     "default": 2.5
 }
 
 HOME_ADVANTAGE = 1.09
 REGRESSION_WEIGHT = 0.30
-MARKET_BLEND = 0.40
+MARKET_BLEND = 0.15
 
 
 # =========================================
@@ -143,8 +143,8 @@ def expected_goals_match(home_stats, away_stats, league="default"):
     # evita probabilidades irreales
     # =========================================
 
-    home_xg = max(min(home_xg, 2.6), 0.35)
-    away_xg = max(min(away_xg, 2.3), 0.35)
+    home_xg = max(min(home_xg, 3.4), 0.25)
+    away_xg = max(min(away_xg, 3.0), 0.25)
 
 
     # =========================================

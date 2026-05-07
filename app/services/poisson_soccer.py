@@ -26,7 +26,7 @@ def dixon_coles_adjustment(h, a, rho=-0.05):
 # ==========================================================
 # ⚽ BUILD SCORE MATRIX
 # ==========================================================
-def build_score_matrix(home_xg, away_xg, max_goals=8):
+def build_score_matrix(home_xg, away_xg, max_goals=10):
     matrix = {}
 
     for h, a in product(range(max_goals + 1), repeat=2):
