@@ -384,17 +384,9 @@ def get_predictions(limit: int = 1000):
                 "profit":
                     p.profit,
 
-                "home_score":
-                    p.home_score,
-
-                "away_score":
-                    p.away_score,
-
                 "created_at":
-                    p.created_at,
+                    str(p.created_at)
 
-                "settled_at":
-                    p.settled_at
             })
 
         return response
