@@ -314,3 +314,91 @@ def get_match_history(event_id: str):
     db.close()
 
     return response
+
+# =====================================================
+# 🧠 ALL PREDICTIONS HISTORY
+# =====================================================
+
+@router.get("/predictions")
+def get_predictions(limit: int = 1000):
+
+    db: Session = SessionLocal()
+
+    try:
+
+        predictions = db.query(Prediction)\
+            .join(Match)\
+            .order_by(Prediction.id.desc())\
+            .limit(limit)\
+            .all()
+
+        response = []
+
+        for p in predictions:
+
+            response.append({
+
+                "prediction_id":
+                    p.id,
+
+                "event_id":
+                    p.match.event_id,
+
+                "match":
+                    f"{p.match.home_team} vs "
+                    f"{p.match.away_team}",
+
+                "league":
+                    p.match.league,
+
+                "market":
+                    p.market_type,
+
+                "decision":
+                    p.decision,
+
+                "edge":
+                    round(p.edge or 0, 4),
+
+                "model_prob_home":
+                    round(p.model_prob_home or 0, 4),
+
+                "model_prob_draw":
+                    round(p.model_prob_draw or 0, 4),
+
+                "model_prob_away":
+                    round(p.model_prob_away or 0, 4),
+
+                "model_prob_over":
+                    round(p.model_prob_over or 0, 4),
+
+                "model_prob_under":
+                    round(p.model_prob_under or 0, 4),
+
+                "stake":
+                    p.stake,
+
+                "result":
+                    p.result,
+
+                "profit":
+                    p.profit,
+
+                "home_score":
+                    p.home_score,
+
+                "away_score":
+                    p.away_score,
+
+                "created_at":
+                    p.created_at,
+
+                "settled_at":
+                    p.settled_at
+            })
+
+        return response
+
+    finally:
+
+        db.close()
