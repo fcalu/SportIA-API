@@ -12,7 +12,10 @@ async def get_team_stats(league, team_id, last_n=25):
         data = r.json()
 
     events = data.get("events", [])
-
+    print(
+    f"⚽ TEAM {team_id} | LEAGUE {league} | EVENTS FOUND: {len(events)}",
+    flush=True
+)
     goals_for = 0
     goals_against = 0
     games_played = 0
@@ -33,6 +36,10 @@ async def get_team_stats(league, team_id, last_n=25):
 
     btts_count = 0
     over25_count = 0
+
+    weighted_gf = 0
+    weighted_ga = 0
+    weight_sum = 0
 
     for event in events:
 
@@ -74,6 +81,11 @@ async def get_team_stats(league, team_id, last_n=25):
         home_score = extract_score(home)
         away_score = extract_score(away)
 
+        weight = max(
+            1,
+            last_n - games_played
+        )
+
         total_goals = home_score + away_score
 
         if total_goals > 2.5:
@@ -90,7 +102,9 @@ async def get_team_stats(league, team_id, last_n=25):
 
             goals_for += home_score
             goals_against += away_score
-
+            weighted_gf += home_score * weight
+            weighted_ga += away_score * weight
+            weight_sum += weight
             home_games += 1
             home_goals_for += home_score
             home_goals_against += away_score
@@ -115,7 +129,9 @@ async def get_team_stats(league, team_id, last_n=25):
 
             goals_for += away_score
             goals_against += home_score
-
+            weighted_gf += away_score * weight
+            weighted_ga += home_score * weight
+            weight_sum += weight
             away_games += 1
             away_goals_for += away_score
             away_goals_against += home_score
@@ -166,7 +182,12 @@ async def get_team_stats(league, team_id, last_n=25):
             "away_goals_for": 0,
             "away_goals_against": 0
         }
-
+        if games_played < 5:
+    
+            print(
+                f"⚠️ LOW SAMPLE SIZE TEAM {team_id}: {games_played}",
+                flush=True
+            )
     return {
 
         "goals_for": goals_for,
@@ -186,7 +207,20 @@ async def get_team_stats(league, team_id, last_n=25):
 
         "over25_rate": round(over25_count / games_played, 4),
         "btts_rate": round(btts_count / games_played, 4),
+        "weighted_goals_for":
+    round(
+        weighted_gf / max(weight_sum, 1),
+        3
+    ),
 
+"weighted_goals_against":
+    round(
+        weighted_ga / max(weight_sum, 1),
+        3
+    ),
+
+"sample_warning":
+    games_played < 5,
         "home_games": home_games,
         "home_goals_for": home_goals_for,
         "home_goals_against": home_goals_against,
