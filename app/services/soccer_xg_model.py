@@ -39,6 +39,7 @@ LEAGUE_BASELINES = {
     # --- Torneos FIFA / Selecciones ---
     "fifa.friendly": 2.7,
     "fifa.wcq.ply": 2.2,       # Máxima tensión: El miedo a perder baja el promedio
+    "fifa.worldcup": 2.7, # Copa del Mundo: Equilibrio entre fase de grupos y eliminatorias
     "aut.1": 3.0,           # Austrian Bundesliga: Estilo vertical, promedios muy altos (similar a NED1)
     "bel.1": 2.8,           # Jupiler Pro League: Muy abierta, estable en producción de goles
     "sui.1": 2.9,           # Swiss Super League: Históricamente ofensiva, pocos empates a cero

@@ -17,7 +17,7 @@ SPORT_PATHS = {
     "soccer/ned.1", "soccer/por.1", "soccer/conmebol.libertadores", 
     "soccer/fifa.friendly", "soccer/ksa.1","soccer/conmebol.sudamericana",
     "soccer/nor.1", "soccer/swe.1","soccer/bra.1", "soccer/aut.1", "soccer/bel.1", "soccer/sui.1", "soccer/jpn.1",
-    "soccer/chn.1",
+    "soccer/chn.1","soccer/fifa.world",
 ],
     "nba": ["basketball/nba"],
     "nfl": ["football/nfl"],
