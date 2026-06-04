@@ -273,15 +273,21 @@ async def ai_predict(req):
             home_stats = await get_team_stats(league, home_id)
             away_stats = await get_team_stats(league, away_id)
 
-            print("\n⚽ HOME STATS")
-            print(home_stats)
+            print("\n========================")
+            print("⚽ HOME STATS")
+            print(json.dumps(home_stats, indent=2))
 
-            print("\n⚽ AWAY STATS")
-            print(away_stats)
-            
+            print("\n========================")
+            print("⚽ AWAY STATS")
+            print(json.dumps(away_stats, indent=2))
+
             xg = expected_goals_match(
                 home_stats, away_stats, league
             )
+
+            print("\n========================")
+            print("⚽ XG MODEL")
+            print(json.dumps(xg, indent=2))
 
             # 🟢 [NUEVO] Paso 2: Usar la línea real de ESPN (ej. 2.5) para el cálculo
             total_line = espn_data["over_under"] if espn_data else safe_float(odds.get("over_under"), 2.5)
