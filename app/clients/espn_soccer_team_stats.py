@@ -1,5 +1,7 @@
 import httpx
-
+from app.services.national_team_history import (
+    get_national_team_events
+)
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 
 
@@ -12,6 +14,18 @@ async def get_team_stats(league, team_id, last_n=25):
         data = r.json()
 
     events = data.get("events", [])
+
+    if league.upper().startswith("FIFA"):
+    
+        national_events = await get_national_team_events(
+            team_id
+        )
+
+        print(
+            f"🌎 TOTAL NATIONAL EVENTS: {len(national_events)}",
+            flush=True
+        )
+
     print(
     f"⚽ TEAM {team_id} | LEAGUE {league} | EVENTS FOUND: {len(events)}",
     flush=True
