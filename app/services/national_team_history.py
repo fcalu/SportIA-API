@@ -39,6 +39,21 @@ async def get_national_team_events(team_id):
                     flush=True
                 )
 
+                if events:
+
+                    try:
+
+                        first = events[0]
+
+                        print(
+                            f"📋 {league}: "
+                            f"{first.get('name','NO_NAME')}",
+                            flush=True
+                        )
+
+                    except:
+                        pass
+
                 all_events.extend(events)
 
             except Exception as e:
