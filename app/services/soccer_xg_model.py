@@ -99,9 +99,30 @@ def calculate_team_strength(team_stats, league_avg, is_home=True):
         1
     )
 
-    gf_per_game = goals_for / games
-    ga_per_game = goals_against / games
+    confidence = min(
+        games / 10,
+        1.0
+    )
 
+    weighted_gf = team_stats.get(
+        "weighted_goals_for"
+    )
+
+    weighted_ga = team_stats.get(
+        "weighted_goals_against"
+    )
+
+    gf_per_game = (
+        weighted_gf
+        if weighted_gf is not None
+        else goals_for / games
+    )
+
+    ga_per_game = (
+        weighted_ga
+        if weighted_ga is not None
+        else goals_against / games
+    )
     # =====================================
     # LOCAL / VISITANTE
     # =====================================
@@ -139,14 +160,23 @@ def calculate_team_strength(team_stats, league_avg, is_home=True):
 
     league_half = league_avg / 2
 
+    dynamic_regression = (
+        REGRESSION_WEIGHT
+        + ((1 - confidence) * 0.25)
+    )
+
     attack_strength = (
-        (1 - REGRESSION_WEIGHT) * gf_per_game
-        + REGRESSION_WEIGHT * league_half
+        (1 - dynamic_regression)
+        * gf_per_game
+        + dynamic_regression
+        * league_half
     )
 
     defense_strength = (
-        (1 - REGRESSION_WEIGHT) * ga_per_game
-        + REGRESSION_WEIGHT * league_half
+        (1 - dynamic_regression)
+        * ga_per_game
+        + dynamic_regression
+        * league_half
     )
 
     return attack_strength, defense_strength
