@@ -15,8 +15,18 @@ async def get_team_stats(league, team_id, last_n=25):
 
     events = data.get("events", [])
 
-    if league.upper().startswith("FIFA"):
-    
+    print(
+        f"🏆 LEAGUE RECEIVED: {league}",
+        flush=True
+    )
+
+    NATIONAL_LEAGUES = {
+        "FIFA.FRIENDLY",
+        "FIFA.WORLD"
+    }
+
+    if league.upper() in NATIONAL_LEAGUES:
+
         national_events = await get_national_team_events(
             team_id
         )
@@ -25,6 +35,20 @@ async def get_team_stats(league, team_id, last_n=25):
             f"🌎 TOTAL NATIONAL EVENTS: {len(national_events)}",
             flush=True
         )
+
+        if len(national_events) > len(events):
+
+            print(
+                f"✅ USING NATIONAL EVENTS: {len(national_events)}",
+                flush=True
+            )
+
+            events = national_events
+
+    print(
+        f"⚽ TEAM {team_id} | LEAGUE {league} | EVENTS FOUND: {len(events)}",
+        flush=True
+    )
 
     print(
     f"⚽ TEAM {team_id} | LEAGUE {league} | EVENTS FOUND: {len(events)}",
@@ -54,6 +78,11 @@ async def get_team_stats(league, team_id, last_n=25):
     weighted_gf = 0
     weighted_ga = 0
     weight_sum = 0
+
+    print(
+    f"📊 PROCESSING EVENTS: {len(events)}",
+    flush=True
+)
 
     for event in events:
 
@@ -196,12 +225,12 @@ async def get_team_stats(league, team_id, last_n=25):
             "away_goals_for": 0,
             "away_goals_against": 0
         }
-        if games_played < 5:
-    
-            print(
-                f"⚠️ LOW SAMPLE SIZE TEAM {team_id}: {games_played}",
-                flush=True
-            )
+    if games_played < 5:
+
+        print(
+            f"⚠️ LOW SAMPLE SIZE TEAM {team_id}: {games_played}",
+            flush=True
+        )
     return {
 
         "goals_for": goals_for,

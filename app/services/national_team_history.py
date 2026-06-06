@@ -47,7 +47,7 @@ async def get_national_team_events(team_id):
 
                         print(
                             f"📋 {league}: "
-                            f"{first.get('name','NO_NAME')}",
+                            f"{first.get('name', 'NO_NAME')}",
                             flush=True
                         )
 
